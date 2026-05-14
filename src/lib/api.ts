@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // 1. Tạo một instance Axios độc lập
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL,
+  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001",
   headers: {
     'Content-Type': 'application/json',
   },
@@ -23,20 +23,27 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// 3. RESPONSE INTERCEPTOR: Xử lý dữ liệu trả về (Bóc tách 'data')
+// 3. RESPONSE INTERCEPTOR: Xử lý dữ liệu trả về
 api.interceptors.response.use(
   (response) => {
-    // Trả thẳng dữ liệu từ Backend vào logic code, bỏ qua các lớp metadata thừa
-    return response.data; 
+    // Để nguyên response để bên page.tsx có thể check res.status === 200
+    return response; 
   },
   (error) => {
+    // Lấy url đang gọi để kiểm tra
+    const requestUrl = error.config?.url || '';
+    const isLoginRequest = requestUrl.includes('/auth/login');
+
     // Tự động đá văng ra trang đăng nhập nếu Token hết hạn (Lỗi 401)
-    if (error.response?.status === 401 && typeof window !== 'undefined') {
+    // NHƯNG PHẢI BỎ QUA nếu người dùng đang ở trang đăng nhập gọi api login
+    if (error.response?.status === 401 && typeof window !== 'undefined' && !isLoginRequest) {
       localStorage.removeItem('access_token');
+      localStorage.removeItem('user'); // Nhớ clear cả user
       window.location.href = '/login';
     }
-    // Trả về đúng câu thông báo lỗi bằng tiếng Việt từ NestJS Exception Filter
-    return Promise.reject(error.response?.data?.message || 'Có lỗi xảy ra');
+    
+    // Trả nguyên object error về cho page.tsx tự xử lý hiển thị
+    return Promise.reject(error);
   }
 );
 

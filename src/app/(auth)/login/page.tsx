@@ -26,7 +26,7 @@ export default function LoginPage() {
       if (res.status === 200 && res.data) {
         localStorage.setItem('access_token', res.data.access_token);
         localStorage.setItem('user', JSON.stringify(res.data.user));
-        
+
         // Chuyển hướng về dashboard sau khi Dũng đăng nhập thành công
         router.push('/dashboard');
       }
@@ -51,17 +51,17 @@ export default function LoginPage() {
               {error}
             </div>
           )}
-          
+
           <div className="space-y-4">
             <div>
               <label className="text-sm font-medium text-slate-700">Email sinh viên/giảng viên</label>
               <input
                 type="email"
                 required
-                className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-black shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="dh52200529@student.stu.edu.vn"
+                placeholder="example@gmail.com"
               />
             </div>
             <div>
@@ -69,10 +69,9 @@ export default function LoginPage() {
               <input
                 type="password"
                 required
-                className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-black shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
               />
             </div>
           </div>
