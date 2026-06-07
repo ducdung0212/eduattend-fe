@@ -5,11 +5,9 @@ import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import toast from "react-hot-toast";
+import { Faculty } from "@/types";
 
-interface Faculty {
-  faculty_code: string;
-  name: string;
-}
+
 
 interface FacultyFormModalProps {
   open: boolean;
@@ -33,7 +31,7 @@ export function FacultyFormModal({ open, faculty, onClose, onSuccess }: FacultyF
     }
   }, [open, faculty]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     setSubmitting(true);
     try {
@@ -67,7 +65,7 @@ export function FacultyFormModal({ open, faculty, onClose, onSuccess }: FacultyF
             Hủy
           </Button>
           <Button type="submit" form="faculty-form" variant="primary" loading={submitting}>
-            Lưu lại
+            Lưu
           </Button>
         </>
       }

@@ -6,107 +6,103 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { usePagination } from "@/hooks/usePagination";
 import api from "@/lib/api";
-import { PaginationMeta } from "@/types";
+import { Faculty, PaginationMeta } from "@/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { FacultyFormModal } from "./_components/FacultyFormModal";
 
-interface Faculty {
-    faculty_code: string;
-    name: string;
-}
 
 const LIMIT = 10;
 
 export default function FacultyManagementPage() {
-    const [modalOpen, setModalOpen] = useState(false);
-    const [editingFaculty, setEditingFaculty] = useState<Faculty | null>(null);
-    const [facultyToDelete, setFacultyToDelete] = useState<Faculty | null>(null);
-    const [deleting, setDeleting] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingFaculty, setEditingFaculty] = useState<Faculty | null>(null);
+  const [facultyToDelete, setFacultyToDelete] = useState<Faculty | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
-    const [faculties,setFaculties]=useState<Faculty[]>([]);
-    const [meta,setMeta]=useState<PaginationMeta|null>(null);
-    const [loading,setLoading]=useState(true);
-    const[search,setSearch]=useState("");
+  const [faculties, setFaculties] = useState<Faculty[]>([]);
+  const [meta, setMeta] = useState<PaginationMeta | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
 
-    const {page,setPage,reset:resetPage}=usePagination(meta?.totalPages??1);
+  const { page, setPage, reset: resetPage } = usePagination(meta?.totalPages ?? 1);
 
-    const fetchFaculties=useCallback(async()=>{
-        setLoading(true);
-        try{
-            const res=await api.get("/faculties",{
-                params:{
-                    page,
-                    limit:LIMIT,
-                    search:search||undefined,
-                }
-            });
-            setFaculties(res.data?.data??[]);
-            setMeta(res.data?.meta??null);
-        }catch(e){
-            console.error("Lỗi khi tải danh sách khoa:",e);
-            toast.error("Không thể tải danh sách khoa");
-        }finally{
-            setLoading(false);
+  const fetchFaculties = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await api.get("/faculties", {
+        params: {
+          page,
+          limit: LIMIT,
+          search: search || undefined,
         }
-    },[page,search]);
-
-    useEffect(()=>{
-        const t=setTimeout(fetchFaculties,search?400:0);
-        return ()=>clearTimeout(t);
-    },[fetchFaculties,search]);
-
-    const handleOpenModal = useCallback((f?: Faculty) => {
-        setEditingFaculty(f || null);
-        setModalOpen(true);
-    }, []);
-
-    const handleCloseModal = useCallback(() => {
-        setModalOpen(false);
-    }, []);
-
-    const handleSearch=(v: string)=>{
-        setSearch(v);
-        resetPage();
+      });
+      setFaculties(res.data?.data ?? []);
+      setMeta(res.data?.meta ?? null);
+    } catch (e) {
+      console.error("Lỗi khi tải danh sách khoa:", e);
+      toast.error("Không thể tải danh sách khoa");
+    } finally {
+      setLoading(false);
     }
+  }, [page, search]);
 
-   const confirmDelete= async ()=>{
-    if(!facultyToDelete) return;
+  useEffect(() => {
+    const t = setTimeout(fetchFaculties, search ? 400 : 0);
+    return () => clearTimeout(t);
+  }, [fetchFaculties, search]);
+
+  const handleOpenModal = useCallback((f?: Faculty) => {
+    setEditingFaculty(f || null);
+    setModalOpen(true);
+  }, []);
+
+  const handleCloseModal = useCallback(() => {
+    setModalOpen(false);
+  }, []);
+
+  const handleSearch = (v: string) => {
+    setSearch(v);
+    resetPage();
+  }
+
+  const confirmDelete = async () => {
+    if (!facultyToDelete) return;
     setDeleting(true);
-    try{
-        await api.delete(`/facultues/${facultyToDelete.faculty_code}`);
-        toast.success("Xóa khoa thành công");
-        fetchFaculties();
-        setFacultyToDelete(null);
-    }catch(err:any){
-        const msg=err.respone?.data?.message||err.message;
-        toast.error(Array.isArray(msg)?msg.join(", "):msg);
-    }finally{
-        setDeleting(false);
+    try {
+      await api.delete(`/faculties/${facultyToDelete.faculty_code}`);
+      toast.success("Xóa khoa thành công");
+      fetchFaculties();
+      setFacultyToDelete(null);
+    } catch (err: any) {
+      const msg = err.respone?.data?.message || err.message;
+      toast.error(Array.isArray(msg) ? msg.join(", ") : msg);
+    } finally {
+      setDeleting(false);
     }
-   };
+  };
 
-   const columns: Column<Faculty>[]=useMemo(()=>[
+  const columns: Column<Faculty>[] = useMemo(() => [
     {
-        key:"faculty_code",
-        label:"Mã khoa",
-        render:(f)=>(
-            <span className="font-semibold text-slate-900">{f.faculty_code}</span>
-        ),
+      key: "faculty_code",
+      label: "Mã khoa",
+      render: (f) => (
+        <span className="font-semibold text-slate-900">{f.faculty_code}</span>
+      ),
     },
     {
-        key:"name",
-        label:"Tên khoa",
-        render:(f)=>(
-            <span className="text-slate-700">{f.name}</span>
-        ),
+      key: "name",
+      label: "Tên khoa",
+      render: (f) => (
+        <span className="text-slate-700">{f.name}</span>
+      ),
     },
     {
-        key:"actions",
-        label:"Thao tác",
-        align:"right",
-        render:(f)=>(
-            <div className="flex justify-end gap-2">
+      key: "actions",
+      label: "Thao tác",
+      align: "right",
+      render: (f) => (
+        <div className="flex justify-end gap-2">
           <Button size="sm" variant="secondary" leftIcon="edit" onClick={() => handleOpenModal(f)}>
             Sửa
           </Button>
@@ -114,10 +110,10 @@ export default function FacultyManagementPage() {
             Xóa
           </Button>
         </div>
-        ),
+      ),
     },
-   ],[handleOpenModal]);
-   return (
+  ], [handleOpenModal]);
+  return (
     <div className="space-y-4">
       {/* 5.1. Khối tiêu đề đầu trang và Nút thêm mới */}
       <div className="flex items-start justify-between gap-4 flex-wrap">

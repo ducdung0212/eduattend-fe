@@ -51,3 +51,6 @@ export function debounce<T extends (...args: unknown[]) => void>(fn: T, ms: numb
     timer = setTimeout(() => fn(...args), ms);
   }) as T;
 }
+/**Ghep thanh ho va ten */
+export const fullName = (person: { last_name?: string; first_name?: string } | null) =>
+    `${person?.last_name ?? ""} ${person?.first_name ?? ""}`.trim();

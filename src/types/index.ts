@@ -31,16 +31,6 @@ export interface MenuItem {
   children?: MenuItem[];
 }
 
-// ── Course ──────────────────────────────────────────────────
-export interface Course {
-  id: string;
-  name: string;
-  code: string;
-  credits: number;
-  lecturerId: string;
-  semester: string;
-  created_at: string;
-}
 
 // ── Attendance ───────────────────────────────────────────────
 export type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
@@ -54,13 +44,26 @@ export interface AttendanceRecord {
   note?: string;
 }
 
-// ── Grade ────────────────────────────────────────────────────
-export interface Grade {
-  id: string;
-  studentId: string;
-  courseId: string;
-  midterm?: number;
-  final?: number;
-  average?: number;
-  semester: string;
+// ── Models ───────────────────────────────────────────────────
+export interface Faculty {
+  faculty_code: string;
+  name: string;
+}
+
+export interface Class {
+  class_code: string;
+  name: string;
+  faculty: Faculty;
+}
+export interface Subject{
+  subject_code:string;
+  name:string;
+}
+export interface Lecturer{
+  lecturer_code:string;
+  last_name:string;
+  first_name:string;
+  email:string;
+  phone:string;
+  faculty: Faculty;
 }
