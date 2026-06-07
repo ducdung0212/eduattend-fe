@@ -29,7 +29,7 @@ export default function FaceCheckInPage() {
     setIsLoadingAI(true);
     try {
 
-      const MODEL_URL = '/models';
+      const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model';
       await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
       setIsModelLoaded(true);
 
