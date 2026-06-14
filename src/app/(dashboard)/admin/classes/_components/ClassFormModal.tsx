@@ -24,7 +24,10 @@ export function ClassFormModal({ open, class: classItem, onClose, onSuccess }: C
     useEffect(() => {
         if (open) {
             if (classItem) {
-                setFormData({ class_code: classItem.class_code, name: classItem.name, faculty_code: classItem.faculty.faculty_code || "" });
+                setFormData({ 
+                    class_code: classItem.class_code,
+                    name: classItem.name,
+                    faculty_code: classItem.faculty.faculty_code});
             } else {
                 setFormData({ class_code: "", name: "", faculty_code: "" });
             }

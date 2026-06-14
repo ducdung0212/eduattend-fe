@@ -10,11 +10,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { ClassFormModal } from "./_components/ClassFormModal";
 import { Modal } from "@/components/ui/Modal";
+import { ClassImportModal } from "./_components/ClassImportModal";
 
 const LIMIT = 10;
 
 export default function ClassManagementPage() {
     const [modalOpen, setModalOpen] = useState(false);
+    const [importModalOpen, setImportModalOpen] = useState(false);
     const [editingClass, setEditingClass] = useState<Class | null>(null);
     const [classToDelete, setClassToDelete] = useState<Class | null>(null);
     const [deleting, setDeleting] = useState(false);
@@ -131,9 +133,14 @@ export default function ClassManagementPage() {
                         Tổng quan và quản lý danh mục lớp trong hệ thống
                     </p>
                 </div>
-                <Button variant="primary" leftIcon="plus" onClick={() => handleOpenModal()}>
-                    Thêm lớp
-                </Button>
+                <div className="flex gap-2">
+                    <Button variant="secondary" leftIcon="upload" onClick={() => setImportModalOpen(true)}>
+                        Import Excel
+                    </Button>
+                    <Button variant="primary" leftIcon="plus" onClick={() => handleOpenModal()}>
+                        Thêm lớp
+                    </Button>
+                </div>
             </div>
 
             <div className="bg-white border border-slate-200/70 rounded-xl overflow-hidden">
@@ -167,6 +174,11 @@ export default function ClassManagementPage() {
                 open={modalOpen}
                 onClose={handleCloseModal}
                 class={editingClass}
+                onSuccess={fetchClasses}
+            />
+            <ClassImportModal
+                open={importModalOpen}
+                onClose={() => setImportModalOpen(false)}
                 onSuccess={fetchClasses}
             />
 

@@ -12,6 +12,7 @@
     "@tabler/icons-react": "^3.44.0",
     "axios": "^1.16.0",
     "clsx": "^2.1.1",
+    "dayjs": "^1.11.21",
     "face-api.js": "^0.22.2",
     "lucide-react": "^1.16.0",
     "next": "16.2.6",

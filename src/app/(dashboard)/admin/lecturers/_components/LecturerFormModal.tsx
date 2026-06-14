@@ -4,13 +4,13 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import api from "@/lib/api";
-import { Faculty } from "@/types";
+import { Faculty, Lecturer } from "@/types";
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import toast from "react-hot-toast";
 
 interface LecturerFormModalProps {
     open: boolean;
-    lecturer: any | null; 
+    lecturer: Lecturer | null; 
     onClose: () => void;
     onSuccess: () => void;
 }
@@ -60,9 +60,9 @@ export function LecturerFormModal({ open, lecturer, onClose, onSuccess }: Lectur
                     phone: lecturer.phone ?? "",
                     faculty_code: lecturer.faculty?.faculty_code ?? "",
                     create_account: false, 
-                    user_id: lecturer.user_id ?? "", 
+                    user_id: lecturer.user.id ?? "", 
                 });
-                setSearchTerm(lecturer.user ? lecturer.user.email : "");
+                setSearchTerm(lecturer.user.email || "");
             } else {
                 setFormData({
                     lecturer_code: "",

@@ -4,13 +4,13 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import api from "@/lib/api";
-import { Class, Faculty } from "@/types";
+import { Class, Faculty, Student } from "@/types";
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import toast from "react-hot-toast";
 
 interface StudentFormModalProps {
     open: boolean;
-    student: any | null;
+    student: Student|null;
     onClose: () => void;
     onSuccess: () => void;
 }
@@ -71,9 +71,9 @@ export function StudentFormModal({ open, student, onClose, onSuccess }: StudentF
                     phone: student.phone ?? "",
                     class_code: student.class?.class_code ?? "",
                     create_account: false,
-                    user_id: student.user_id ?? "",
+                    user_id: student.user.id ?? "",
                 });
-                setSearchTerm(student.user ? student.user.email : "");
+                setSearchTerm(student.user.email || "");
             } else {
                 setFormData({
                     student_code: "",

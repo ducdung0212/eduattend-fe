@@ -1,3 +1,5 @@
+import { User } from 'next-auth';
+
 export * from './auth';
 
 // ── Pagination ──────────────────────────────────────────────
@@ -34,15 +36,8 @@ export interface MenuItem {
 
 // ── Attendance ───────────────────────────────────────────────
 export type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
-
-export interface AttendanceRecord {
-  id: string;
-  studentId: string;
-  courseId: string;
-  date: string;
-  status: AttendanceStatus;
-  note?: string;
-}
+export type AttendanceMethod='qr_code'|'face';
+export type RekognitionResult='match'|'not_match'|'unknown'
 
 // ── Models ───────────────────────────────────────────────────
 export interface Faculty {
@@ -55,15 +50,57 @@ export interface Class {
   name: string;
   faculty: Faculty;
 }
-export interface Subject{
-  subject_code:string;
-  name:string;
+export interface Subject {
+  subject_code: string;
+  name: string;
 }
-export interface Lecturer{
-  lecturer_code:string;
-  last_name:string;
-  first_name:string;
-  email:string;
+export interface Student {
+  student_code: string;
+  last_name: string;
+  first_name: string;
+  email: string;
   phone:string;
+  class: Class;
+  user:User;
+}
+export interface Lecturer {
+  lecturer_code: string;
+  last_name: string;
+  first_name: string;
+  email: string;
+  phone: string;
   faculty: Faculty;
+  user:User;
+}
+
+export interface Room {
+  room_code: string;
+  name: string;
+  capacity: number;
+}
+
+export interface ExamSchedule {
+  id: string;
+  subject: Subject;
+  group: number;
+  start_time: Date;
+  duration: number;
+  room: Room;
+  note: string;
+}
+
+export interface AttendanceRecord{
+  id:string;
+  student: Student;
+  attendance_method:AttendanceMethod;
+  rekognition_result:RekognitionResult;
+  confidence:number;
+  attendance_time:Date;
+  exam_schedule_id:string;
+}
+
+export interface ExamSupervisor{
+  id:string;
+  lecturer:Lecturer;
+  exam_schedule_id:string;
 }

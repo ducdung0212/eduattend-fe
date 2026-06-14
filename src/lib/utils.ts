@@ -1,5 +1,11 @@
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 /** Gộp Tailwind class an toàn (tránh xung đột) */
 export function cn(...inputs: ClassValue[]) {
@@ -7,15 +13,23 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /** Format ngày theo kiểu Việt Nam */
-export function formatDate(iso: string, opts?: Intl.DateTimeFormatOptions): string {
-  return new Date(iso).toLocaleDateString('vi-VN', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    ...opts,
-  });
+export function toVNDatetimeLocal(value: string | Date): string {
+    if (!value) return '';
+    return dayjs(value).tz('Asia/Ho_Chi_Minh').format('YYYY-MM-DDTHH:mm');
 }
 
+/** Chuyển từ string của thẻ <input type="datetime-local"> (Giờ VN) sang UTC ISO string để gửi lên BE */
+export function fromVNDatetimeLocalToUTC(localStr: string): string {
+    if (!localStr) return '';
+    return dayjs.tz(localStr, 'Asia/Ho_Chi_Minh').utc().toISOString();
+}
+
+/** Format hiển thị ra màn hình cho người dùng xem */
+export function formatDateTime(value: string | Date): string {
+    if (!value) return '';
+    // Tùy chỉnh format hiển thị ở đây (VD: 09:30 15/06/2026)
+    return dayjs(value).tz('Asia/Ho_Chi_Minh').format('HH:mm DD/MM/YYYY');
+}
 /** Lấy 2 chữ cái đầu của tên (dùng cho avatar) */
 export function getInitials(name: string): string {
   return name

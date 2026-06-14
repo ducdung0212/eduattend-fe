@@ -10,11 +10,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { SubjectFormModal } from "./_components/SubjectFormModal";
 import { Modal } from "@/components/ui/Modal";
+import { SubjectImportModal } from "./_components/SubjectImportModal";
 
 const LIMIT = 10;
 
 export default function SubjectManagementPage() {
     const [modalOpen, setModalOpen] = useState(false);
+    const [importModalOpen, setImportModalOpen] = useState(false);
     const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
     const [subjectToDelete, setSubjectToDelete] = useState<Subject | null>(null);
     const [deleting, setDeleting] = useState(false);
@@ -124,9 +126,14 @@ export default function SubjectManagementPage() {
                         Tổng quan và quản lý danh mục môn học trong hệ thống
                     </p>
                 </div>
-                <Button variant="primary" leftIcon="plus" onClick={() => handleOpenModal()}>
-                    Thêm môn học
-                </Button>
+                <div className="flex gap-2">
+                    <Button variant="secondary" leftIcon="upload" onClick={() => setImportModalOpen(true)}>
+                        Import Excel
+                    </Button>
+                    <Button variant="primary" leftIcon="plus" onClick={() => handleOpenModal()}>
+                        Thêm môn học
+                    </Button>
+                </div>
             </div>
             <div className="bg-white border border-slate-200/70 rounded-xl overflow-hidden">
                 <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 flex-wrap">
@@ -159,6 +166,11 @@ export default function SubjectManagementPage() {
                 open={modalOpen}
                 onClose={handleCloseModal}
                 subject={editingSubject}
+                onSuccess={fetchSubjects}
+            />
+            <SubjectImportModal
+                open={importModalOpen}
+                onClose={() => setImportModalOpen(false)}
                 onSuccess={fetchSubjects}
             />
 
