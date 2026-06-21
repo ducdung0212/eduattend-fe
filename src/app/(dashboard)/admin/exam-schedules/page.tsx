@@ -30,6 +30,7 @@ export default function ExamScheduleManagementPage() {
     const [scheduleToDelete, setScheduleToDelete] = useState<ExamSchedule | null>(null);
     const [deleting, setDeleting] = useState(false);
 
+
     // --- State Data ---
     const [examSchedules, setExamSchedules] = useState<ExamSchedule[]>([]);
     const [meta, setMeta] = useState<PaginationMeta | null>(null);
@@ -140,6 +141,20 @@ export default function ExamScheduleManagementPage() {
                     <span className="font-medium text-slate-900">{s.room?.name}</span>
                     <span className="text-xs text-slate-500">{s.room?.room_code}</span>
                 </div>
+            ),
+        },
+        {
+            key: "attendanceRecordTotals",
+            label: "SL Thí sinh",
+            render: (s) => (
+                <span className="text-slate-700">{s.attendance_count} </span>
+            ),
+        },
+        {
+            key: "examSupervisorTotals",
+            label: "SL Giám thị",
+            render: (s) => (
+                <span className="text-slate-700">{s.supervisor_count} </span>
             ),
         },
         {

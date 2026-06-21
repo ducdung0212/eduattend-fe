@@ -235,7 +235,6 @@ export function StudentFormModal({ open, student, onClose, onSuccess }: StudentF
                 />
                 <Input
                     label="Số điện thoại"
-                    required
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                     placeholder="0123456789"

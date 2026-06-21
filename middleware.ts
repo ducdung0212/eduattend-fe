@@ -8,7 +8,7 @@ const ROLE_HOME: Record<string, string> = {
 };
 
 // Các path không cần auth
-const PUBLIC_PATHS = ['/login', '/register', '/forgot-password'];
+const PUBLIC_PATHS = ['/login'];
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

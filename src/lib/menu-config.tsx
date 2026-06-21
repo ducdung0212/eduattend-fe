@@ -43,14 +43,14 @@ const MENU_MAP: Record<Role, MenuItem[]> = {
       children: [
         { label: 'Quản lý ca thi', href: '/admin/exam-schedules', icon: <IconCalendarTime /> },
         { label: 'Điểm danh', href: '/admin/attendances', icon: <IconClipboardCheck /> },
-        { label: 'Đăng ký khuôn mặt ', href: '/lecturer/registration-face', icon: <IconFaceId /> },
+        { label: 'Đăng ký khuôn mặt ', href: '/admin/face-registration', icon: <IconFaceId /> },
       ],
     },
   ],
 
   lecturer: [
     { label: 'Điểm danh', href: '/lecturer/attendances', icon: <IconClipboardCheck /> },
-    { label: 'Lịch gác thi', href: '/lecturer/schedules', icon: <IconCalendarEvent /> },
+    { label: 'Lịch gác thi', href: '/lecturer/exam-schedules', icon: <IconCalendarEvent /> },
   ],
 
   student: [

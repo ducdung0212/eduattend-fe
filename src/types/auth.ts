@@ -5,6 +5,8 @@ export interface User {
   name: string;
   email: string;
   role: Role;
+  lecturer_code?:string;
+  student_code?:string;
   created_at: string;
 }
 
