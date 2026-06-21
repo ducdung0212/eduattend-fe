@@ -3,6 +3,7 @@
 import { Column, DataTable } from "@/components/shared/DataTable";
 import { Pagination } from "@/components/shared/Pagination";
 import { SearchBar } from "@/components/shared/SearchBar";
+import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/hooks/useAuth";
 import { usePagination } from "@/hooks/usePagination";
 import api from "@/lib/api";
@@ -19,10 +20,11 @@ export default function ExamSchedulePage() {
     const { user, initializing } = useAuth();
 
     const [examSchedules, setExamSchedules] = useState<ExamSchedule[]>([]);
-    const [meta, setMeta] = useState<PaginationMeta|null>(null);
+    const [meta, setMeta] = useState<PaginationMeta | null>(null);
     const [loading, setLoading] = useState(true);
 
     const [search, setSearch] = useState("");
+    const [startTime, setStartTime] = useState("");
 
     const { page, setPage, reset: resetPage } = usePagination(meta?.totalPages ?? 1);
 
@@ -36,7 +38,9 @@ export default function ExamSchedulePage() {
                     page,
                     limit: LIMIT,
                     search: search || undefined,
-                    student_code: user.student_code
+                    student_code: user.student_code,
+                    start_time: startTime || undefined,
+
                 },
             });
             setExamSchedules(res.data?.data ?? []);
@@ -47,7 +51,21 @@ export default function ExamSchedulePage() {
         } finally {
             setLoading(false);
         }
-    }, [page, search, user?.student_code]);
+    }, [page, search, user?.student_code, startTime]);
+
+    const handleStartTimeChange = (v: string) => {
+        setStartTime(v);
+        resetPage();
+    };
+
+    const handleClearFilters = () => {
+        setSearch("");
+        setStartTime("");
+        resetPage();
+    };
+
+    const hasActiveFilters = Boolean(search || startTime);
+
 
     useEffect(() => {
         if (initializing) return;
@@ -134,6 +152,23 @@ export default function ExamSchedulePage() {
                         placeholder="Tìm theo tên môn, mã môn, phòng thi..."
                         className="flex-1 min-w-[200px]"
                     />
+                    <div className="flex items-center gap-2">
+                        <label htmlFor="exam-start-time-filter" className="text-sm text-slate-500 whitespace-nowrap">
+                            Ngày thi
+                        </label>
+                        <input
+                            id="exam-start-time-filter"
+                            type="date"
+                            value={startTime}
+                            onChange={(e) => handleStartTimeChange(e.target.value)}
+                            className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                        />
+                    </div>
+                    {hasActiveFilters && (
+                        <Button size="sm" variant="secondary" leftIcon="x" onClick={handleClearFilters}>
+                            Xóa lọc
+                        </Button>
+                    )}
                 </div>
 
                 {/* Bảng dữ liệu */}

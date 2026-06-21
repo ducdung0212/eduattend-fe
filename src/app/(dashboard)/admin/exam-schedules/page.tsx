@@ -38,6 +38,7 @@ export default function ExamScheduleManagementPage() {
 
     // --- State Filters ---
     const [search, setSearch] = useState("");
+    const [startTime, setStartTime] = useState(""); // Lọc theo ngày thi (yyyy-MM-dd)
 
     const { page, setPage, reset: resetPage } = usePagination(meta?.totalPages ?? 1);
 
@@ -50,6 +51,7 @@ export default function ExamScheduleManagementPage() {
                     page,
                     limit: LIMIT,
                     search: search || undefined,
+                    start_time: startTime || undefined,
                 },
             });
             setExamSchedules(res.data?.data ?? []);
@@ -60,7 +62,7 @@ export default function ExamScheduleManagementPage() {
         } finally {
             setLoading(false);
         }
-    }, [page, search]);
+    }, [page, search, startTime]);
 
     // Debounce tìm kiếm
     useEffect(() => {
@@ -83,6 +85,19 @@ export default function ExamScheduleManagementPage() {
         setSearch(v);
         resetPage();
     };
+
+    const handleStartTimeChange = (v: string) => {
+        setStartTime(v);
+        resetPage();
+    };
+
+    const handleClearFilters = () => {
+        setSearch("");
+        setStartTime("");
+        resetPage();
+    };
+
+    const hasActiveFilters = Boolean(search || startTime);
 
     const confirmDelete = async () => {
         if (!scheduleToDelete) return;
@@ -218,6 +233,23 @@ export default function ExamScheduleManagementPage() {
                         placeholder="Tìm theo tên môn, mã môn, phòng thi..."
                         className="flex-1 min-w-[200px]"
                     />
+                    <div className="flex items-center gap-2">
+                        <label htmlFor="exam-start-time-filter" className="text-sm text-slate-500 whitespace-nowrap">
+                            Ngày thi
+                        </label>
+                        <input
+                            id="exam-start-time-filter"
+                            type="date"
+                            value={startTime}
+                            onChange={(e) => handleStartTimeChange(e.target.value)}
+                            className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                        />
+                    </div>
+                    {hasActiveFilters && (
+                        <Button size="sm" variant="secondary" leftIcon="x" onClick={handleClearFilters}>
+                            Xóa lọc
+                        </Button>
+                    )}
                 </div>
 
                 {/* Bảng dữ liệu */}

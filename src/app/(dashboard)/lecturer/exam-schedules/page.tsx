@@ -10,6 +10,7 @@ import { formatDateTime } from "@/lib/utils";
 import { ExamSchedule, PaginationMeta } from "@/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
+import { Button } from "@/components/ui/Button";
 
 const LIMIT = 10;
 
@@ -21,6 +22,7 @@ export default function ExamSchedulePage() {
     const [loading, setLoading] = useState(true);
 
     const [search, setSearch] = useState("");
+    const [startTime, setStartTime] = useState("");
 
     const { page, setPage, reset: resetPage } = usePagination(meta?.totalPages ?? 1);
 
@@ -34,7 +36,9 @@ export default function ExamSchedulePage() {
                     page,
                     limit: LIMIT,
                     search: search || undefined,
-                    lecturer_code: user.lecturer_code
+                    lecturer_code: user.lecturer_code,
+                    start_time: startTime || undefined,
+
                 },
             });
             setExamSchedules(res.data?.data ?? []);
@@ -45,8 +49,19 @@ export default function ExamSchedulePage() {
         } finally {
             setLoading(false);
         }
-    }, [page, search, user?.lecturer_code]);
+    }, [page, search, user?.lecturer_code, startTime]);
 
+    const handleStartTimeChange = (v: string) => {
+        setStartTime(v);
+        resetPage();
+    };
+
+    const handleClearFilters = () => {
+        setSearch("");
+        setStartTime("");
+        resetPage();
+    };
+    const hasActiveFilters = Boolean(search || startTime);
     useEffect(() => {
         if (initializing) return;
         if (!user?.lecturer_code) {
@@ -124,49 +139,67 @@ export default function ExamSchedulePage() {
                 <span className="text-slate-500 text-sm">{s.note || "—"}</span>
             ),
         },
-    ],[]);
+    ], []);
 
     return (
-            <div className="space-y-4">
-                {/* Header */}
-                <div className="flex items-start justify-between gap-4 flex-wrap">
-                    <div>
-                        <h1 className="text-xl font-medium text-slate-900 tracking-tight">
-                            Lịch thi của tôi
-                        </h1>
-                    </div>
-                </div>
-    
-                <div className="bg-white border border-slate-200/70 rounded-xl overflow-hidden">
-                    {/* Bộ lọc */}
-                    <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 flex-wrap bg-slate-50/50">
-                        <SearchBar
-                            value={search}
-                            onChange={handleSearch}
-                            placeholder="Tìm theo tên môn, mã môn, phòng thi..."
-                            className="flex-1 min-w-[200px]"
-                        />
-                    </div>
-    
-                    {/* Bảng dữ liệu */}
-                    <DataTable<ExamSchedule>
-                        columns={columns}
-                        data={examSchedules}
-                        loading={loading}
-                        rowKey={(s) => s.id}
-                        skeletonRows={LIMIT}
-                        emptyText="Không tìm thấy lịch thi nào phù hợp."
-                    />
-    
-                    {/* Phân trang */}
-                    <Pagination
-                        page={page}
-                        totalPages={meta?.totalPages ?? 1}
-                        total={meta?.total ?? 0}
-                        limit={LIMIT}
-                        onPageChange={setPage}
-                    />
+        <div className="space-y-4">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                    <h1 className="text-xl font-medium text-slate-900 tracking-tight">
+                        Lịch thi của tôi
+                    </h1>
                 </div>
             </div>
-        );
+
+            <div className="bg-white border border-slate-200/70 rounded-xl overflow-hidden">
+                {/* Bộ lọc */}
+                <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 flex-wrap bg-slate-50/50">
+                    <SearchBar
+                        value={search}
+                        onChange={handleSearch}
+                        placeholder="Tìm theo tên môn, mã môn, phòng thi..."
+                        className="flex-1 min-w-[200px]"
+                    />
+                </div>
+
+                <div className="flex items-center gap-2">
+                    <label htmlFor="exam-start-time-filter" className="text-sm text-slate-500 whitespace-nowrap">
+                        Ngày thi
+                    </label>
+                    <input
+                        id="exam-start-time-filter"
+                        type="date"
+                        value={startTime}
+                        onChange={(e) => handleStartTimeChange(e.target.value)}
+                        className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                    />
+                </div>
+                {hasActiveFilters && (
+                    <Button size="sm" variant="secondary" leftIcon="x" onClick={handleClearFilters}>
+                        Xóa lọc
+                    </Button>
+                )}
+
+                {/* Bảng dữ liệu */}
+                <DataTable<ExamSchedule>
+                    columns={columns}
+                    data={examSchedules}
+                    loading={loading}
+                    rowKey={(s) => s.id}
+                    skeletonRows={LIMIT}
+                    emptyText="Không tìm thấy lịch thi nào phù hợp."
+                />
+
+                {/* Phân trang */}
+                <Pagination
+                    page={page}
+                    totalPages={meta?.totalPages ?? 1}
+                    total={meta?.total ?? 0}
+                    limit={LIMIT}
+                    onPageChange={setPage}
+                />
+            </div>
+        </div>
+    );
 }
