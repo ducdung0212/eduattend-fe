@@ -108,14 +108,12 @@ export default function FaceRegistrationPage() {
             }
 
             // [BƯỚC 2]: Upload song song lên S3, chỉ những file có uploadUrl hợp lệ
-            // Map theo fileName để tránh lệch index khi backend trả về thứ tự khác
             const configByFileName = new Map(uploadConfigs.map((c) => [c.fileName, c]));
 
             const uploadResults = await Promise.all(
                 images.map(async (img) => {
                     const config = configByFileName.get(img.file.name);
 
-                    // Nếu backend không cấp URL (tên file sai format, v.v.)
                     if (!config || !config.success || !config.uploadUrl) {
                         return {
                             img,
@@ -140,38 +138,41 @@ export default function FaceRegistrationPage() {
             const successfulUploads = uploadResults.filter((r) => r.s3Ok);
             const failedBeforeConfirm = uploadResults.filter((r) => !r.s3Ok);
 
-            // Nếu không có ảnh nào lên S3 được thì dừng luôn
             if (successfulUploads.length === 0) {
                 throw new Error("Tất cả ảnh đều thất bại khi đẩy lên hệ thống lưu trữ. Vui lòng thử lại.");
             }
 
-            // [BƯỚC 3]: Chỉ confirm những ảnh đã PUT thành công lên S3
+            // [BƯỚC 3]: Gọi backend confirm các file đã upload S3 thành công
             const confirmPayload = successfulUploads.map((r) => ({
-                student_code: r.img.student_code,
                 fileName: r.img.file.name,
+                student_code: r.img.student_code,
             }));
 
             const confirmRes = await api.post("/student-photos/confirm-uploads", {
-                uploads: confirmPayload,
+                files: confirmPayload,
             });
 
-            const results: { student_code: string; fileName: string; success: boolean; message: string }[] =
+            const results: { success: boolean; fileName: string; student_code: string; message: string }[] =
                 confirmRes.data?.data || confirmRes.data;
 
-            // Gộp kết quả: lỗi từ bước S3 + lỗi từ bước confirm
-            const allFailures: string[] = [];
+            // [BƯỚC 4]: Gộp kết quả lỗi từ bước S3 + bước confirm
+            const allFailures: { name: string; reason: string }[] = [];
 
-            // Lỗi từ bước upload S3
             failedBeforeConfirm.forEach((r) => {
-                allFailures.push(`${r.img.file.name}: ${r.reason}`);
+                allFailures.push({
+                    name: r.img.file.name,
+                    reason: r.reason,
+                });
             });
 
-            // Lỗi từ bước confirm (backend)
             if (Array.isArray(results)) {
                 results
                     .filter((r) => !r.success)
                     .forEach((r) => {
-                        allFailures.push(`${r.fileName ?? r.student_code}: ${r.message}`);
+                        allFailures.push({
+                            name: r.fileName || r.student_code,
+                            reason: r.message,
+                        });
                     });
             }
 
@@ -183,22 +184,23 @@ export default function FaceRegistrationPage() {
                 toast.success(`Đã lưu thành công toàn bộ ${successCount} ảnh!`);
                 handleClearAll();
             } else if (successCount > 0) {
-                // Một phần thành công
                 toast(
                     (t) => (
                         <div className="text-sm">
-                            <p className="font-semibold text-green-700 mb-1"> {successCount} ảnh lưu thành công</p>
-                            <p className="font-semibold text-rose-600 mb-1"> {allFailures.length} ảnh thất bại:</p>
-                            <ul className="list-disc pl-3 space-y-1 text-rose-700">
+                            <p className="font-semibold text-green-600 mb-1">✅ {successCount} ảnh lưu thành công</p>
+                            <p className="font-semibold text-rose-600 mb-2">❌ {allFailures.length} ảnh thất bại:</p>
+                            <div className="max-h-32 overflow-y-auto pr-1 space-y-1">
                                 {allFailures.map((err, i) => (
-                                    <li key={i}>{err}</li>
+                                    <div key={i} className="bg-rose-50 border border-rose-100 rounded px-2 py-1.5 text-xs text-rose-700">
+                                        <span className="font-semibold">{err.name}:</span> {err.reason}
+                                    </div>
                                 ))}
-                            </ul>
+                            </div>
                         </div>
                     ),
                     { duration: 8000 }
                 );
-                // Chỉ xóa những ảnh đã thành công khỏi danh sách
+
                 const successFileNames = new Set(
                     Array.isArray(results)
                         ? results.filter((r) => r.success).map((r) => r.fileName)
@@ -206,16 +208,17 @@ export default function FaceRegistrationPage() {
                 );
                 setImages((prev) => prev.filter((img) => !successFileNames.has(img.file.name)));
             } else {
-                // Tất cả đều thất bại ở bước confirm
                 toast.error(
                     (t) => (
                         <div className="text-sm">
-                            <p className="font-semibold mb-1">Lưu thất bại:</p>
-                            <ul className="list-disc pl-3 space-y-1">
+                            <p className="font-semibold text-rose-600 mb-2">Lưu thất bại toàn bộ:</p>
+                            <div className="max-h-40 overflow-y-auto pr-1 space-y-1">
                                 {allFailures.map((err, i) => (
-                                    <li key={i}>{err}</li>
+                                    <div key={i} className="bg-rose-50 border border-rose-100 rounded px-2 py-1.5 text-xs text-rose-700">
+                                        <span className="font-semibold">{err.name}:</span> {err.reason}
+                                    </div>
                                 ))}
-                            </ul>
+                            </div>
                         </div>
                     ),
                     { duration: 8000 }
