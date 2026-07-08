@@ -12,9 +12,10 @@ interface AttendanceRecordModalProps {
     open: boolean;
     examSchedule: ExamSchedule | null;
     onClose: () => void;
+    onSuccess?: () => void;
 }
 
-export function AttendanceRecordModal({ open, examSchedule, onClose }: AttendanceRecordModalProps) {
+export function AttendanceRecordModal({ open, examSchedule, onClose, onSuccess }: AttendanceRecordModalProps) {
     const [records, setRecords] = useState<AttendanceRecord[]>([]);
     const [loading, setLoading] = useState(false);
 
@@ -94,6 +95,7 @@ export function AttendanceRecordModal({ open, examSchedule, onClose }: Attendanc
             if (success.length > 0) {
                 setCodesInput("");
                 fetchRecords();
+                onSuccess?.();
             }
         } catch (err: any) {
             const msg = err.response?.data?.message || err.message;
@@ -109,6 +111,7 @@ export function AttendanceRecordModal({ open, examSchedule, onClose }: Attendanc
             await api.delete(`/attendance-records/${record.id}`);
             toast.success("Đã xóa sinh viên khỏi danh sách");
             setRecords((prev) => prev.filter((r) => r.id !== record.id));
+            onSuccess?.();
         } catch (err: any) {
             const msg = err.response?.data?.message || err.message;
             toast.error(Array.isArray(msg) ? msg.join(", ") : msg);

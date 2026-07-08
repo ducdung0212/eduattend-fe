@@ -62,6 +62,7 @@ export interface Student {
   phone: string;
   class: Class;
   user: User;
+  photos?: { image_url: string }[];
 }
 export interface Lecturer {
   lecturer_code: string;
@@ -79,16 +80,33 @@ export interface Room {
   capacity: number;
 }
 
+export interface ExamPeriod {
+  id: string;
+  name: string;
+  start_date: string;
+  end_date: string;
+  exam_schedule_count?: number;
+}
+
+export interface RoomWithAvailability extends Room {
+  occupied_slots: {
+    start_time: string;
+    end_time: string;
+    subject_name: string;
+  }[];
+}
+
 export interface ExamSchedule {
   id: string;
   subject: Subject;
   group: number;
-  start_time: Date;
+  start_time: string;
   duration: number;
   room: Room;
-  attendance_count: number; 
-  supervisor_count: number;
+  attendance_count: number;
+  supervisors: string[];
   note: string;
+  exam_period?: ExamPeriod;
 }
 
 export interface AttendanceRecord {

@@ -5,9 +5,10 @@ import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import api from "@/lib/api";
 import { fromVNDatetimeLocalToUTC, toVNDatetimeLocal } from "@/lib/utils";
-import { ExamSchedule, Room, Subject } from "@/types";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { ExamPeriod, ExamSchedule, Room, Subject } from "@/types";
+import React, { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import toast from "react-hot-toast";
+import dayjs from "dayjs";
 
 interface ExamScheduleFormModalProps {
     open: boolean;
@@ -19,6 +20,32 @@ interface ExamScheduleFormModalProps {
 // Các mốc thời lượng thường dùng — click để điền nhanh thay vì gõ tay
 const DURATION_PRESETS = [45, 60, 90, 120, 180];
 
+// Tên thứ tiếng Việt viết tắt
+const DAY_NAMES = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+
+/** Sinh mảng các ngày giữa start và end (inclusive) */
+function generateDateRange(startStr: string, endStr: string): string[] {
+    const dates: string[] = [];
+    let current = dayjs(startStr);
+    const end = dayjs(endStr);
+    while (current.isBefore(end) || current.isSame(end, 'day')) {
+        dates.push(current.format("YYYY-MM-DD"));
+        current = current.add(1, 'day');
+    }
+    return dates;
+}
+
+/** Format ngày ngắn: "T2 25/06" */
+function formatDateChip(dateStr: string): { dayName: string; date: string } {
+    const d = dayjs(dateStr);
+    return {
+        dayName: DAY_NAMES[d.day()],
+        date: d.format("DD/MM"),
+    };
+}
+
+
+
 export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }: ExamScheduleFormModalProps) {
     const [formData, setFormData] = useState({
         subject_code: "",
@@ -27,16 +54,32 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
         duration: 0,
         room_code: "",
         note: "",
+        exam_period_id: "",
     });
 
-    // Tách ngày/giờ để UI dễ nhập hơn datetime-local gộp; ghép lại vào formData.start_time khi thay đổi
+    // Tách ngày/giờ để UI dễ nhập hơn datetime-local gộp
     const [examDate, setExamDate] = useState(""); // YYYY-MM-DD
     const [examTime, setExamTime] = useState(""); // HH:mm
 
     const [submitting, setSubmitting] = useState(false);
 
-    // Sức chứa phòng đang chọn — hiển thị cho người dùng tham khảo
-    const [selectedRoomCapacity, setSelectedRoomCapacity] = useState<number | null>(null);
+    // --- Đợt thi ---
+    const [examPeriods, setExamPeriods] = useState<ExamPeriod[]>([]);
+    const [loadingPeriods, setLoadingPeriods] = useState(false);
+    const [selectedPeriod, setSelectedPeriod] = useState<ExamPeriod | null>(null);
+
+    // --- Date chips ---
+    const dateRange = useMemo(() => {
+        if (!selectedPeriod) return [];
+        return generateDateRange(selectedPeriod.start_date, selectedPeriod.end_date);
+    }, [selectedPeriod]);
+
+    // --- Room combobox ---
+    const [rooms, setRooms] = useState<Room[]>([]);
+    const [roomSearch, setRoomSearch] = useState("");
+    const [isSearchingRoom, setIsSearchingRoom] = useState(false);
+    const [showRoomDropdown, setShowRoomDropdown] = useState(false);
+    const roomDropdownRef = useRef<HTMLDivElement>(null);
 
     // --- Subject combobox ---
     const [subjectSearch, setSubjectSearch] = useState("");
@@ -44,13 +87,6 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
     const [isSearchingSubject, setIsSearchingSubject] = useState(false);
     const [showSubjectDropdown, setShowSubjectDropdown] = useState(false);
     const subjectDropdownRef = useRef<HTMLDivElement>(null);
-
-    // --- Room combobox ---
-    const [roomSearch, setRoomSearch] = useState("");
-    const [rooms, setRooms] = useState<Room[]>([]);
-    const [isSearchingRoom, setIsSearchingRoom] = useState(false);
-    const [showRoomDropdown, setShowRoomDropdown] = useState(false);
-    const roomDropdownRef = useRef<HTMLDivElement>(null);
 
     // Đóng dropdown khi click ra ngoài
     useEffect(() => {
@@ -66,9 +102,48 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
+    // --- Fetch đợt thi ---
+    const fetchPeriods = useCallback(async () => {
+        setLoadingPeriods(true);
+        try {
+            const res = await api.get("/exam-periods", { params: { limit: 100 } });
+            setExamPeriods(res.data?.data || []);
+        } catch {
+            console.error("Lỗi tải đợt thi");
+        } finally {
+            setLoadingPeriods(false);
+        }
+    }, []);
+
+    // --- Fetch rooms (debounced) ---
+    const fetchRooms = useCallback(async () => {
+        if (!roomSearch || roomSearch.length < 1 || !showRoomDropdown) {
+            if (!roomSearch) setRooms([]);
+            return;
+        }
+        setIsSearchingRoom(true);
+        try {
+            const res = await api.get("/rooms", {
+                params: { search: roomSearch, limit: 10 },
+            });
+            setRooms(res.data?.data || []);
+        } catch (error) {
+            console.error("Lỗi tìm kiếm phòng:", error);
+        } finally {
+            setIsSearchingRoom(false);
+        }
+    }, [roomSearch, showRoomDropdown]);
+
+    useEffect(() => {
+        const t = setTimeout(fetchRooms, roomSearch ? 400 : 0);
+        return () => clearTimeout(t);
+    }, [fetchRooms, roomSearch]);
+
     // Khởi tạo data khi mở modal
     useEffect(() => {
         if (open) {
+            fetchPeriods();
+
             if (examSchedule) {
                 const vnDatetimeLocal = examSchedule.start_time
                     ? toVNDatetimeLocal(examSchedule.start_time)
@@ -82,6 +157,7 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
                     duration: examSchedule.duration ?? 0,
                     room_code: examSchedule.room?.room_code ?? "",
                     note: examSchedule.note ?? "",
+                    exam_period_id: examSchedule.exam_period?.id ?? "",
                 });
                 setExamDate(datePart ?? "");
                 setExamTime(timePart ?? "");
@@ -95,7 +171,13 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
                         ? `${examSchedule.room.name} (${examSchedule.room.room_code})`
                         : ""
                 );
-                setSelectedRoomCapacity(null); // Sẽ fetch lại nếu người dùng mở dropdown phòng
+
+                // Set selected period for editing
+                if (examSchedule.exam_period) {
+                    setSelectedPeriod(examSchedule.exam_period);
+                } else {
+                    setSelectedPeriod(null);
+                }
             } else {
                 setFormData({
                     subject_code: "",
@@ -104,21 +186,20 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
                     duration: 0,
                     room_code: "",
                     note: "",
+                    exam_period_id: "",
                 });
                 setExamDate("");
                 setExamTime("");
                 setSubjectSearch("");
                 setRoomSearch("");
-                setSelectedRoomCapacity(null);
+                setSelectedPeriod(null);
             }
             setSubjects([]);
-            setRooms([]);
             setShowSubjectDropdown(false);
-            setShowRoomDropdown(false);
         }
-    }, [open, examSchedule]);
+    }, [open, examSchedule, fetchPeriods]);
 
-    // Ghép examDate + examTime thành formData.start_time (định dạng datetime-local)
+    // Ghép examDate + examTime thành formData.start_time
     useEffect(() => {
         if (examDate && examTime) {
             setFormData((prev) => ({ ...prev, start_time: `${examDate}T${examTime}` }));
@@ -126,6 +207,8 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
             setFormData((prev) => ({ ...prev, start_time: "" }));
         }
     }, [examDate, examTime]);
+
+
 
     // --- Fetch môn học (debounced) ---
     const fetchSubjects = useCallback(async () => {
@@ -151,48 +234,29 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
         return () => clearTimeout(t);
     }, [fetchSubjects, subjectSearch]);
 
-    // --- Fetch phòng thi (debounced) ---
-    const fetchRooms = useCallback(async () => {
-        if (!roomSearch || roomSearch.length < 2 || !showRoomDropdown) {
-            if (!roomSearch) setRooms([]);
-            return;
-        }
-        setIsSearchingRoom(true);
-        try {
-            const res = await api.get("/rooms", {
-                params: { search: roomSearch, limit: 10 },
-            });
-            setRooms(res.data?.data || []);
-        } catch (error) {
-            console.error("Lỗi tìm kiếm phòng thi:", error);
-        } finally {
-            setIsSearchingRoom(false);
-        }
-    }, [roomSearch, showRoomDropdown]);
+    // --- Chọn đợt thi ---
+    const handleSelectPeriod = (periodId: string) => {
+        const period = examPeriods.find((p) => p.id === periodId) ?? null;
+        setSelectedPeriod(period);
+        setFormData((prev) => ({ ...prev, exam_period_id: periodId }));
+        // Reset ngày + phòng khi đổi đợt thi
+        setExamDate("");
+        setExamTime("");
+        setFormData((prev) => ({ ...prev, room_code: "" }));
+        setRoomSearch("");
+    };
 
-    useEffect(() => {
-        const t = setTimeout(fetchRooms, roomSearch ? 400 : 0);
-        return () => clearTimeout(t);
-    }, [fetchRooms, roomSearch]);
+    // --- Chọn ngày thi (date chip) ---
+    const handleSelectDate = (date: string) => {
+        setExamDate(date);
+    };
 
-    // Khi sửa ca thi có sẵn, fetch riêng capacity của phòng đang chọn
-    // (EXAM_SCHEDULE_SELECT chỉ trả room_code + name, không có capacity)
-    useEffect(() => {
-        if (!open || !examSchedule?.room?.room_code) return;
-        let cancelled = false;
-        (async () => {
-            try {
-                const res = await api.get("/rooms", {
-                    params: { search: examSchedule.room!.room_code, limit: 1 },
-                });
-                const room: Room | undefined = res.data?.data?.[0];
-                if (!cancelled && room) setSelectedRoomCapacity(room.capacity ?? null);
-            } catch (error) {
-                console.error("Lỗi tải sức chứa phòng:", error);
-            }
-        })();
-        return () => { cancelled = true; };
-    }, [open, examSchedule]);
+    // --- Chọn phòng (combobox) ---
+    const handleSelectRoom = (room: Room) => {
+        setFormData((prev) => ({ ...prev, room_code: room.room_code }));
+        setRoomSearch(`${room.name} (${room.room_code})`);
+        setShowRoomDropdown(false);
+    };
 
     // --- Chọn môn học ---
     const handleSelectSubject = (subject: Subject) => {
@@ -201,13 +265,7 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
         setShowSubjectDropdown(false);
     };
 
-    // --- Chọn phòng thi ---
-    const handleSelectRoom = (room: Room) => {
-        setFormData((prev) => ({ ...prev, room_code: room.room_code }));
-        setRoomSearch(`${room.name} (${room.room_code})`);
-        setShowRoomDropdown(false);
-        setSelectedRoomCapacity(room.capacity ?? null);
-    };
+
 
     // --- Submit ---
     const handleSubmit = async (e: React.SyntheticEvent) => {
@@ -217,6 +275,7 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
             const payload = {
                 ...formData,
                 start_time: fromVNDatetimeLocalToUTC(formData.start_time),
+                exam_period_id: formData.exam_period_id || undefined,
             };
             if (examSchedule) {
                 await api.patch(`/exam-schedules/${examSchedule.id}`, payload);
@@ -235,11 +294,14 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
         }
     };
 
+
+
     return (
         <Modal
             open={open}
             onClose={onClose}
             title={examSchedule ? "Sửa lịch thi" : "Thêm lịch thi"}
+            size="lg"
             footer={
                 <>
                     <Button type="button" variant="secondary" onClick={onClose}>
@@ -251,11 +313,172 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
                 </>
             }
         >
-            <form id="exam-schedule-form" onSubmit={handleSubmit} className="space-y-4">
+            <form id="exam-schedule-form" onSubmit={handleSubmit} className="space-y-5">
 
-                {/* Chọn môn học — combobox */}
+                {/* ══════════ STEP 1: Chọn đợt thi ══════════ */}
+                <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
+                        <i className="ti ti-calendar-event text-sm text-slate-400" />
+                        Đợt thi
+                    </label>
+                    {loadingPeriods ? (
+                        <div className="flex items-center gap-2 text-sm text-slate-400 py-2">
+                            <span className="w-4 h-4 rounded-full border-2 border-slate-200 border-t-blue-500 animate-spin inline-block" />
+                            Đang tải...
+                        </div>
+                    ) : (
+                        <select
+                            required
+                            value={formData.exam_period_id}
+                            onChange={(e) => handleSelectPeriod(e.target.value)}
+                            className="w-full rounded-lg border text-sm text-slate-900 bg-white h-9 px-3 outline-none transition-colors border-slate-200 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+                        >
+                            <option value="">— Chọn đợt thi —</option>
+                            {examPeriods.map((p) => (
+                                <option key={p.id} value={p.id}>
+                                    {p.name}
+                                </option>
+                            ))}
+                        </select>
+                    )}
+                </div>
+
+                {/* ══════════ STEP 2: Chọn ngày thi (Date chips) ══════════ */}
+                {selectedPeriod && (
+                    <div className="flex flex-col gap-2">
+                        <label className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
+                            <i className="ti ti-calendar text-sm text-slate-400" />
+                            Ngày thi
+                            <span className="text-xs text-slate-400 font-normal ml-1">
+                                ({dateRange.length} ngày)
+                            </span>
+                        </label>
+
+                        {dateRange.length <= 30 ? (
+                            /* ── Chip grid (≤ 30 ngày) ── */
+                            <div className="flex flex-wrap gap-1.5">
+                                {dateRange.map((date) => {
+                                    const { dayName, date: dateStr } = formatDateChip(date);
+                                    const isSelected = examDate === date;
+                                    const isWeekend = dayjs(date).day() === 0;
+
+                                    return (
+                                        <button
+                                            key={date}
+                                            type="button"
+                                            onClick={() => handleSelectDate(date)}
+                                            className={`
+                                                flex flex-col items-center gap-0.5 rounded-lg border px-2.5 py-1.5 text-xs transition-all duration-150
+                                                ${isSelected
+                                                    ? "border-blue-500 bg-blue-50 text-blue-700 font-semibold shadow-sm ring-2 ring-blue-100"
+                                                    : isWeekend
+                                                        ? "border-slate-200 bg-orange-50/50 text-slate-500 hover:border-slate-300 hover:bg-orange-50"
+                                                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                                                }
+                                            `}
+                                        >
+                                            <span className={`text-[10px] font-medium ${isSelected ? "text-blue-500" : "text-slate-400"}`}>
+                                                {dayName}
+                                            </span>
+                                            <span>{dateStr}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            /* ── Fallback date picker (> 21 ngày) ── */
+                            <input
+                                type="date"
+                                required
+                                value={examDate}
+                                min={selectedPeriod.start_date.slice(0, 10)}
+                                max={selectedPeriod.end_date.slice(0, 10)}
+                                onChange={(e) => handleSelectDate(e.target.value)}
+                                className="w-full rounded-lg border text-sm text-slate-900 bg-white h-9 px-3 outline-none transition-colors border-slate-200 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+                            />
+                        )}
+                    </div>
+                )}
+
+                {/* ══════════ STEP 3: Giờ bắt đầu ══════════ */}
+                {examDate && (
+                    <div className="flex flex-col gap-1.5">
+                        <label className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
+                            <i className="ti ti-clock text-sm text-slate-400" />
+                            Giờ bắt đầu
+                        </label>
+                        <input
+                            type="time"
+                            required
+                            value={examTime}
+                            onChange={(e) => setExamTime(e.target.value)}
+                            className="w-full rounded-lg border text-sm text-slate-900 bg-white h-9 px-3 outline-none transition-colors border-slate-200 focus:border-slate-400 focus:ring-2 focus:ring-slate-100 max-w-[200px]"
+                        />
+                    </div>
+                )}
+
+                {/* ══════════ STEP 4: Chọn phòng (combobox) ══════════ */}
+                <div className="flex flex-col gap-1.5" ref={roomDropdownRef}>
+                    <label className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
+                        <i className="ti ti-door text-sm text-slate-400" />
+                        Phòng thi
+                    </label>
+                    <div className="relative">
+                        <input
+                            type="text"
+                            required
+                            placeholder="Gõ tên hoặc mã phòng để tìm..."
+                            value={roomSearch}
+                            onFocus={() => setShowRoomDropdown(true)}
+                            onChange={(e) => {
+                                setRoomSearch(e.target.value);
+                                setShowRoomDropdown(true);
+                                if (e.target.value === "") setFormData((prev) => ({ ...prev, room_code: "" }));
+                            }}
+                            className="w-full rounded-lg border text-sm text-slate-900 bg-white h-9 px-3 outline-none transition-colors border-slate-200 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+                        />
+                        {isSearchingRoom && (
+                            <div className="absolute right-3 top-2.5">
+                                <span className="w-4 h-4 rounded-full border-2 border-slate-200 border-t-blue-500 animate-spin inline-block" />
+                            </div>
+                        )}
+                        {showRoomDropdown && roomSearch.length >= 1 && (
+                            <ul className="absolute z-50 w-full mt-1 bg-white border border-slate-200 shadow-xl rounded-md max-h-52 overflow-y-auto">
+                                {!isSearchingRoom && rooms.length === 0 ? (
+                                    <li className="px-4 py-3 text-sm text-slate-500 text-center">
+                                        Không tìm thấy phòng nào
+                                    </li>
+                                ) : (
+                                    rooms.map((room) => (
+                                        <li
+                                            key={room.room_code}
+                                            onMouseDown={(e) => {
+                                                e.preventDefault();
+                                                handleSelectRoom(room);
+                                            }}
+                                            className={`px-3 py-2 cursor-pointer hover:bg-slate-50 border-b border-slate-100 last:border-0 flex flex-col ${formData.room_code === room.room_code ? "bg-blue-50" : ""
+                                                }`}
+                                        >
+                                            <span className="text-sm font-medium text-slate-800">{room.name}</span>
+                                            <div className="flex items-center gap-2 text-xs text-slate-500">
+                                                <span>{room.room_code}</span>
+                                                <span className="text-slate-300">•</span>
+                                                <span>{room.capacity} chỗ</span>
+                                            </div>
+                                        </li>
+                                    ))
+                                )}
+                            </ul>
+                        )}
+                    </div>
+                </div>
+
+                {/* ══════════ STEP 5: Chọn môn học — combobox ══════════ */}
                 <div className="flex flex-col gap-1.5" ref={subjectDropdownRef}>
-                    <label className="text-sm font-medium text-slate-700">Môn học</label>
+                    <label className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
+                        <i className="ti ti-book text-sm text-slate-400" />
+                        Môn học
+                    </label>
                     <div className="relative">
                         <input
                             type="text"
@@ -302,70 +525,7 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
                     </div>
                 </div>
 
-                {/* Chọn phòng thi — combobox */}
-                <div className="flex flex-col gap-1.5" ref={roomDropdownRef}>
-                    <label className="text-sm font-medium text-slate-700">Phòng thi</label>
-                    <div className="relative">
-                        <input
-                            type="text"
-                            required
-                            placeholder="Gõ tên hoặc mã phòng để tìm..."
-                            value={roomSearch}
-                            onFocus={() => setShowRoomDropdown(true)}
-                            onChange={(e) => {
-                                setRoomSearch(e.target.value);
-                                setShowRoomDropdown(true);
-                                if (e.target.value === "") {
-                                    setFormData((prev) => ({ ...prev, room_code: "" }));
-                                    setSelectedRoomCapacity(null);
-                                }
-                            }}
-                            className="w-full rounded-lg border text-sm text-slate-900 bg-white h-9 px-3 outline-none transition-colors border-slate-200 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
-                        />
-                        {isSearchingRoom && (
-                            <div className="absolute right-3 top-2.5">
-                                <span className="w-4 h-4 rounded-full border-2 border-slate-200 border-t-blue-500 animate-spin inline-block" />
-                            </div>
-                        )}
-                        {showRoomDropdown && roomSearch.length >= 2 && (
-                            <ul className="absolute z-50 w-full mt-1 bg-white border border-slate-200 shadow-xl rounded-md max-h-52 overflow-y-auto">
-                                {!isSearchingRoom && rooms.length === 0 ? (
-                                    <li className="px-4 py-3 text-sm text-slate-500 text-center">
-                                        Không tìm thấy phòng nào
-                                    </li>
-                                ) : (
-                                    rooms.map((room) => (
-                                        <li
-                                            key={room.room_code}
-                                            onMouseDown={(e) => {
-                                                e.preventDefault();
-                                                handleSelectRoom(room);
-                                            }}
-                                            className={`px-3 py-2 cursor-pointer hover:bg-slate-50 border-b border-slate-100 last:border-0 flex flex-col ${formData.room_code === room.room_code ? "bg-blue-50" : ""
-                                                }`}
-                                        >
-                                            <span className="text-sm font-medium text-slate-800">{room.name}</span>
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-xs text-slate-500">{room.room_code}</span>
-                                                {typeof room.capacity === "number" && (
-                                                    <span className="text-xs text-slate-400">{room.capacity} chỗ</span>
-                                                )}
-                                            </div>
-                                        </li>
-                                    ))
-                                )}
-                            </ul>
-                        )}
-                    </div>
-                    {/* Sức chứa phòng đã chọn — giúp người dùng tránh chọn phòng quá nhỏ */}
-                    {formData.room_code && typeof selectedRoomCapacity === "number" && (
-                        <span className="text-xs text-slate-500">
-                            Sức chứa: <span className="font-medium text-slate-700">{selectedRoomCapacity} chỗ</span>
-                        </span>
-                    )}
-                </div>
-
-                {/* Nhóm thi */}
+                {/* ══════════ STEP 6: Nhóm thi ══════════ */}
                 <Input
                     label="Nhóm thi"
                     type="number"
@@ -376,31 +536,7 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
                     placeholder="Ví dụ: 1"
                 />
 
-                {/* Thời gian bắt đầu — tách Ngày và Giờ để dễ nhập hơn (đặc biệt trên mobile) */}
-                <div className="grid grid-cols-2 gap-3">
-                    <div className="flex flex-col gap-1.5">
-                        <label className="text-sm font-medium text-slate-700">Ngày thi</label>
-                        <input
-                            type="date"
-                            required
-                            value={examDate}
-                            onChange={(e) => setExamDate(e.target.value)}
-                            className="w-full rounded-lg border text-sm text-slate-900 bg-white h-9 px-3 outline-none transition-colors border-slate-200 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
-                        />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                        <label className="text-sm font-medium text-slate-700">Giờ bắt đầu</label>
-                        <input
-                            type="time"
-                            required
-                            value={examTime}
-                            onChange={(e) => setExamTime(e.target.value)}
-                            className="w-full rounded-lg border text-sm text-slate-900 bg-white h-9 px-3 outline-none transition-colors border-slate-200 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
-                        />
-                    </div>
-                </div>
-
-                {/* Thời lượng (phút) */}
+                {/* ══════════ STEP 7: Thời lượng (phút) ══════════ */}
                 <div className="flex flex-col gap-1.5">
                     <Input
                         label="Thời lượng (phút)"
@@ -418,8 +554,8 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
                                 type="button"
                                 onClick={() => setFormData((prev) => ({ ...prev, duration: preset }))}
                                 className={`text-xs rounded-full border px-2.5 py-1 transition-colors ${formData.duration === preset
-                                        ? "border-blue-500 bg-blue-50 text-blue-600 font-medium"
-                                        : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                                    ? "border-blue-500 bg-blue-50 text-blue-600 font-medium"
+                                    : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
                                     }`}
                             >
                                 {preset}p
@@ -428,7 +564,7 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
                     </div>
                 </div>
 
-                {/* Ghi chú */}
+                {/* ══════════ STEP 8: Ghi chú ══════════ */}
                 <div className="flex flex-col gap-1.5">
                     <label className="text-sm font-medium text-slate-700">Ghi chú</label>
                     <textarea

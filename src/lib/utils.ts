@@ -68,3 +68,26 @@ export function debounce<T extends (...args: unknown[]) => void>(fn: T, ms: numb
 /**Ghep thanh ho va ten */
 export const fullName = (person: { last_name?: string; first_name?: string } | null) =>
     `${person?.last_name ?? ""} ${person?.first_name ?? ""}`.trim();
+
+/** Format chỉ giờ:phút theo giờ VN (VD: "09:30") */
+export function formatTime(value: string | Date): string {
+    if (!value) return '';
+    return dayjs(value).tz('Asia/Ho_Chi_Minh').format('HH:mm');
+}
+
+/** Lấy ngày hôm nay dạng yyyy-MM-dd (local VN) */
+export function todayString(): string {
+    return dayjs().tz('Asia/Ho_Chi_Minh').format('YYYY-MM-DD');
+}
+
+/** Format ngày theo kiểu VN dài (VD: "thứ ba, 24/06/2026") */
+export function formatDateVN(dateStr: string): string {
+    if (!dateStr) return '';
+    const d = new Date(dateStr + 'T00:00:00');
+    return d.toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+/** Cộng/trừ ngày từ chuỗi yyyy-MM-dd, trả về yyyy-MM-dd */
+export function addDays(dateStr: string, delta: number): string {
+    return dayjs(dateStr).add(delta, 'day').format('YYYY-MM-DD');
+}

@@ -34,16 +34,17 @@ const MENU_MAP: Record<Role, MenuItem[]> = {
         { label: 'Quản lý phòng', href: '/admin/rooms', icon: <IconDoor /> },
         { label: 'Quản lý sinh viên', href: '/admin/students', icon: <IconIdBadge2 /> },
         { label: 'Quản lý giảng viên', href: '/admin/lecturers', icon: <IconTie /> },
+        { label: 'Đăng ký khuôn mặt ', href: '/admin/face-registration', icon: <IconFaceId /> },
+
       ],
     },
     {
       label: 'Quản lý thi cử',
-      href: '/admin/exam-schedules', // Lưu ý: Chữ 'falcuties' đang bị sai chính tả (faculties), bạn nên check lại router nhé
+      href: '/admin/exam-schedules', 
       icon: <IconCalendarTime />,
       children: [
-        { label: 'Quản lý ca thi', href: '/admin/exam-schedules', icon: <IconCalendarTime /> },
+        { label: 'Quản lý lịch thi', href: '/admin/exam-schedules', icon: <IconCalendarTime /> },
         { label: 'Điểm danh', href: '/admin/attendances', icon: <IconClipboardCheck /> },
-        { label: 'Đăng ký khuôn mặt ', href: '/admin/face-registration', icon: <IconFaceId /> },
       ],
     },
   ],

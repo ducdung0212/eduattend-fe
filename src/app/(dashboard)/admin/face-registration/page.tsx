@@ -149,7 +149,7 @@ export default function FaceRegistrationPage() {
             }));
 
             const confirmRes = await api.post("/student-photos/confirm-uploads", {
-                files: confirmPayload,
+                uploads: confirmPayload,
             });
 
             const results: { success: boolean; fileName: string; student_code: string; message: string }[] =

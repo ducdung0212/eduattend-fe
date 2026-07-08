@@ -60,9 +60,9 @@ export function LecturerFormModal({ open, lecturer, onClose, onSuccess }: Lectur
                     phone: lecturer.phone ?? "",
                     faculty_code: lecturer.faculty?.faculty_code ?? "",
                     create_account: false, 
-                    user_id: lecturer.user.id ?? "", 
+                    user_id: lecturer.user?.id ?? "", 
                 });
-                setSearchTerm(lecturer.user.email || "");
+                setSearchTerm(lecturer.user?.email || "");
             } else {
                 setFormData({
                     lecturer_code: "",
