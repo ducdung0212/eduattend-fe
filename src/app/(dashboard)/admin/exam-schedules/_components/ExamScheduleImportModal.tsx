@@ -33,7 +33,7 @@ export function ExamScheduleImportModal({ open, onClose, onSuccess }: ExamSchedu
             endpoint="/exam-schedules/import"
             extraPayload={selectedPeriodId ? { exam_period_id: selectedPeriodId } : undefined}
             isSubmitDisabled={!selectedPeriodId}
-            templateUrl="/templateExcel/ExamSchedule.xlsx"
+            templateUrl="/TemplateExcel/ExamSchedule.xlsx"
         >
             <div className="space-y-2 mt-4 p-4 bg-slate-50 border border-slate-800 rounded-xl">
                 <label className="text-sm font-semibold text-slate-700">

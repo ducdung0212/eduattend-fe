@@ -14,7 +14,7 @@ export function LecturerImportModal({ open, onClose, onSuccess }: { open: boolea
             title="Import giảng viên từ Excel"
             endpoint="/lecturers/import"
             extraPayload={{ create_account: String(createAccount) }}
-            templateUrl="/templateExcel/Lecturer.xlsx"
+            templateUrl="/TemplateExcel/Lecturer.xlsx"
         >
             <label className="flex items-center gap-3 p-4 bg-blue-50 border border-blue-100 rounded-xl cursor-pointer">
                 <input

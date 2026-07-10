@@ -16,7 +16,7 @@ export function SubjectImportModal({ open, onClose, onSuccess }: SubjectImportMo
             onSuccess={onSuccess}
             title="Import môn học từ Excel"
             endpoint="/subjects/import"
-            templateUrl="/templateExcel/Subject.xlsx"
+            templateUrl="/TemplateExcel/Subject.xlsx"
         />
     );
 }

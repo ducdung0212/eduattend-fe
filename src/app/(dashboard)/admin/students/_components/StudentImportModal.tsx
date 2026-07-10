@@ -14,7 +14,7 @@ export function StudentImportModal({ open, onClose, onSuccess }: { open: boolean
             title="Import sinh viên từ Excel"
             endpoint="/students/import"
             extraPayload={{ create_account: String(createAccount) }}
-            templateUrl="/templateExcel/Student.xlsx"
+            templateUrl="/TemplateExcel/Student.xlsx"
         >
             <label className="flex items-center gap-3 p-4 bg-blue-50 border border-blue-100 rounded-xl cursor-pointer">
                 <input

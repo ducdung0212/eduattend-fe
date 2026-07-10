@@ -16,7 +16,7 @@ export function ClassImportModal({ open, onClose, onSuccess }: ClassImportModalP
             onSuccess={onSuccess}
             title="Import lớp từ Excel"
             endpoint="/classes/import"
-            templateUrl="/templateExcel/Class.xlsx"
+            templateUrl="/TemplateExcel/Class.xlsx"
         />
     );
 }

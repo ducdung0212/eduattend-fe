@@ -16,7 +16,7 @@ export function RoomImportModal({ open, onClose, onSuccess }: RoomImportModalPro
             onSuccess={onSuccess}
             title="Import phòng học từ Excel"
             endpoint="/rooms/import"
-            templateUrl="/templateExcel/Room.xlsx"
+            templateUrl="/TemplateExcel/Room.xlsx"
         />
     );
 }
