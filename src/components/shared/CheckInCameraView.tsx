@@ -39,6 +39,7 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
     const [isCheckingIn, setIsCheckingIn] = useState(false);
     const [results, setResults] = useState<CheckInResult[]>([]);
     const [faceCount, setFaceCount] = useState(0);
+    const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
 
     const startStr = formatTime(schedule.start_time);
     const endDate = new Date(new Date(schedule.start_time).getTime() + (schedule.duration ?? 120) * 60000);
@@ -47,7 +48,7 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
     // Bật camera khi modal mở
     useEffect(() => {
         if (open) {
-            startCamera();
+            startCamera(facingMode);
         } else {
             stopCamera();
             setResults([]);
@@ -57,7 +58,7 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
         };
     }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const startCamera = async () => {
+    const startCamera = async (currentFacingMode: "environment" | "user" = facingMode) => {
         setIsLoadingAI(true);
         try {
             // Tải model AI
@@ -65,9 +66,9 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
             await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
             setIsModelLoaded(true);
 
-            // Bật camera trước (front camera)
+            // Bật camera
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+                video: { facingMode: currentFacingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
             });
             streamRef.current = stream;
 
@@ -340,8 +341,10 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
                             variant="secondary"
                             size="lg"
                             onClick={() => {
+                                const newMode = facingMode === "environment" ? "user" : "environment";
+                                setFacingMode(newMode);
                                 stopCamera();
-                                startCamera();
+                                startCamera(newMode);
                             }}
                             disabled={isCheckingIn}
                         >
