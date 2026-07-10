@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import api from "@/lib/api";
-import { fromVNDatetimeLocalToUTC, toVNDatetimeLocal } from "@/lib/utils";
+import { fromVNDatetimeLocalToUTC, toVNDatetimeLocal, toYMD } from "@/lib/utils";
 import { ExamPeriod, ExamSchedule, Room, Subject } from "@/types";
 import React, { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import toast from "react-hot-toast";
@@ -387,14 +387,13 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
                             </div>
                         ) : (
                             /* ── Fallback date picker (> 21 ngày) ── */
-                            <input
+                            <Input
                                 type="date"
                                 required
                                 value={examDate}
-                                min={selectedPeriod.start_date.slice(0, 10)}
-                                max={selectedPeriod.end_date.slice(0, 10)}
+                                min={toYMD(selectedPeriod.start_date)}
+                                max={toYMD(selectedPeriod.end_date)}
                                 onChange={(e) => handleSelectDate(e.target.value)}
-                                className="w-full rounded-lg border text-sm text-slate-900 bg-white h-9 px-3 outline-none transition-colors border-slate-200 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
                             />
                         )}
                     </div>
@@ -407,12 +406,12 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
                             <i className="ti ti-clock text-sm text-slate-400" />
                             Giờ bắt đầu
                         </label>
-                        <input
+                        <Input
                             type="time"
                             required
                             value={examTime}
                             onChange={(e) => setExamTime(e.target.value)}
-                            className="w-full rounded-lg border text-sm text-slate-900 bg-white h-9 px-3 outline-none transition-colors border-slate-200 focus:border-slate-400 focus:ring-2 focus:ring-slate-100 max-w-[200px]"
+                            className="max-w-[200px]"
                         />
                     </div>
                 )}

@@ -5,7 +5,7 @@ import { SearchBar } from "@/components/shared/SearchBar";
 import { Button } from "@/components/ui/Button";
 import { usePagination } from "@/hooks/usePagination";
 import api from "@/lib/api";
-import { PaginationMeta, Class } from "@/types";
+import { PaginationMeta, Class, Faculty } from "@/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { ClassFormModal } from "./_components/ClassFormModal";
@@ -24,9 +24,25 @@ export default function ClassManagementPage() {
     const [classes, setClasses] = useState<Class[]>([]);
     const [meta, setMeta] = useState<PaginationMeta | null>(null);
     const [loading, setLoading] = useState(true);
+
     const [search, setSearch] = useState("");
+    const [facultyCode,setFacultyCode]=useState("");
+
+    const [faculties,setFaculties]=useState<Faculty[]>([]);
 
     const { page, setPage, reset: resetPage } = usePagination(meta?.totalPages ?? 1);
+
+    useEffect(()=>{
+        const fetchFaculties=async ()=>{
+            try{
+                const res =await api.get("/faculties");
+                setFaculties(res.data?.data||[]);
+            }catch(e){
+                console.error("Error fetching faculties:",e);
+            }
+        }
+        fetchFaculties();
+    },[])
 
     const fetchClasses = useCallback(async () => {
         setLoading(true);
@@ -35,7 +51,8 @@ export default function ClassManagementPage() {
                 params: {
                     page,
                     limit: LIMIT,
-                    search: search || undefined
+                    search: search || undefined,
+                    faculty_code: facultyCode || undefined,
                 }
             });
             setClasses(res.data?.data ?? []);
@@ -46,8 +63,7 @@ export default function ClassManagementPage() {
         } finally {
             setLoading(false);
         }
-    }, [page, search]);
-
+    }, [page, search, facultyCode]);
 
     useEffect(() => {
         const t = setTimeout(fetchClasses, search ? 400 : 0);
@@ -65,6 +81,11 @@ export default function ClassManagementPage() {
 
     const handleSearch = (v: string) => {
         setSearch(v);
+        resetPage();
+    }
+
+    const handleFacultyChange=(e:React.ChangeEvent<HTMLSelectElement>)=>{
+        setFacultyCode(e.target.value);
         resetPage();
     }
 
@@ -151,6 +172,19 @@ export default function ClassManagementPage() {
                         placeholder="Tìm theo mã lớp hoặc tên lớp..."
                         className="flex-1 min-w-48"
                     />
+                    {/* Filter Khoa */}
+                    <select
+                        value={facultyCode}
+                        onChange={handleFacultyChange}
+                        className="h-9 px-3 text-sm text-slate-900 rounded-lg border border-slate-200 bg-white outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 min-w-[180px]"
+                    >
+                        <option value="">-- Tất cả Khoa --</option>
+                        {faculties.map((f) => (
+                            <option key={f.faculty_code} value={f.faculty_code}>
+                                {f.name}
+                            </option>
+                        ))}
+                    </select>
                 </div>
                 <DataTable<Class>
                     columns={columns}

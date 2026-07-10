@@ -96,6 +96,12 @@ export interface RoomWithAvailability extends Room {
   }[];
 }
 
+export interface ClassBreakdown {
+  class_code: string;
+  class_name: string;
+  student_count: number;
+}
+
 export interface ExamSchedule {
   id: string;
   subject: Subject;
@@ -107,6 +113,7 @@ export interface ExamSchedule {
   supervisors: string[];
   note: string;
   exam_period?: ExamPeriod;
+  class_breakdown?: ClassBreakdown[];
 }
 
 export interface AttendanceRecord {

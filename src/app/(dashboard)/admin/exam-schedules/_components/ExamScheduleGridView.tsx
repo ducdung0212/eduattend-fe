@@ -111,13 +111,13 @@ function ContextMenu({
             className: "text-red-600 hover:bg-red-50",
         },
         {
-            label: "Quản lý thí sinh",
+            label: "Danh sách thí sinh",
             icon: <i className="ti ti-users text-sm" />,
             onClick: () => { onManageStudents?.(schedule); onClose(); },
             className: "text-emerald-600 hover:bg-emerald-50",
         },
         {
-            label: "Quản lý giám thị",
+            label: "Phân công giám thị",
             icon: <i className="ti ti-user-check text-sm" />,
             onClick: () => { onManageSupervisors?.(schedule); onClose(); },
             className: "text-violet-600 hover:bg-violet-50",

@@ -1,7 +1,9 @@
 'use client';
 
 import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
+import { Pagination } from "@/components/shared/Pagination";
 import api from "@/lib/api";
 import { formatDateTime } from "@/lib/utils";
 import { ExamSchedule, AttendanceRecord } from "@/types";
@@ -18,6 +20,8 @@ interface AttendanceRecordModalProps {
 export function AttendanceRecordModal({ open, examSchedule, onClose, onSuccess }: AttendanceRecordModalProps) {
     const [records, setRecords] = useState<AttendanceRecord[]>([]);
     const [loading, setLoading] = useState(false);
+    const [page, setPage] = useState(1);
+    const [meta, setMeta] = useState({ total: 0, totalPages: 1 });
 
     const [search, setSearch] = useState("");
     const [codesInput, setCodesInput] = useState("");
@@ -34,29 +38,32 @@ export function AttendanceRecordModal({ open, examSchedule, onClose, onSuccess }
                 params: {
                     exam_schedule_id: examScheduleId,
                     search: search || undefined,
-                    limit: 100,
+                    page,
+                    limit: 10,
                 },
             });
             setRecords(res.data?.data ?? []);
+            setMeta(res.data?.meta ?? { total: 0, totalPages: 1 });
         } catch (e) {
             console.error("Lỗi khi tải danh sách sinh viên:", e);
             toast.error("Không thể tải danh sách sinh viên");
         } finally {
             setLoading(false);
         }
-    }, [examScheduleId, search]);
+    }, [examScheduleId, search, page]);
 
     // Debounce tìm kiếm + reset khi mở modal
     useEffect(() => {
         if (!open) {
             setSearch("");
+            setPage(1);
             setCodesInput("");
             setRecords([]);
             return;
         }
         const t = setTimeout(fetchRecords, search ? 400 : 0);
         return () => clearTimeout(t);
-    }, [open, fetchRecords, search]);
+    }, [open, fetchRecords, search, page]);
 
     // --- Thêm sinh viên (1 hoặc nhiều mã SV) ---
     const handleAdd = async () => {
@@ -170,12 +177,14 @@ export function AttendanceRecordModal({ open, examSchedule, onClose, onSuccess }
                 </div>
 
                 {/* Tìm kiếm */}
-                <input
+                <Input
                     type="text"
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => {
+                        setSearch(e.target.value);
+                        setPage(1);
+                    }}
                     placeholder="Tìm theo mã SV, họ tên..."
-                    className="w-full rounded-lg border text-sm text-slate-900 bg-white h-9 px-3 outline-none transition-colors border-slate-200 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
                 />
 
                 {/* Danh sách sinh viên */}
@@ -225,6 +234,16 @@ export function AttendanceRecordModal({ open, examSchedule, onClose, onSuccess }
                         </tbody>
                     </table>
                 </div>
+
+                {meta.totalPages > 1 && (
+                    <Pagination
+                        page={page}
+                        totalPages={meta.totalPages}
+                        total={meta.total}
+                        limit={10}
+                        onPageChange={setPage}
+                    />
+                )}
             </div>
         </Modal>
     );

@@ -7,6 +7,7 @@ import { Pagination } from "@/components/shared/Pagination";
 import { SearchBar } from "@/components/shared/SearchBar";
 import { usePagination } from "@/hooks/usePagination";
 import api from "@/lib/api";
+import { toYMD } from "@/lib/utils";
 import { ExamPeriod, PaginationMeta } from "@/types";
 import React, { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
@@ -83,8 +84,8 @@ export function ExamPeriodManagerModal({ open, onClose, onSuccess }: ExamPeriodM
         setEditingPeriod(period);
         setFormData({
             name: period.name,
-            start_date: period.start_date.slice(0, 10),
-            end_date: period.end_date.slice(0, 10),
+            start_date: toYMD(period.start_date),
+            end_date: toYMD(period.end_date),
         });
         setShowForm(true);
     };
@@ -185,7 +186,7 @@ export function ExamPeriodManagerModal({ open, onClose, onSuccess }: ExamPeriodM
                                         </div>
 
                                         {/* Actions */}
-                                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <div className="flex gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
                                             <button
                                                 onClick={() => handleEdit(period)}
                                                 className="h-7 w-7 flex items-center justify-center rounded-md text-blue-600 hover:bg-blue-50 transition-colors"
@@ -240,27 +241,21 @@ export function ExamPeriodManagerModal({ open, onClose, onSuccess }: ExamPeriodM
                             placeholder="VD: Đợt thi cuối kỳ HK2 2025-2026"
                         />
                         <div className="grid grid-cols-2 gap-3">
-                            <div className="flex flex-col gap-1.5">
-                                <label className="text-sm font-medium text-slate-700">Ngày bắt đầu</label>
-                                <input
-                                    type="date"
-                                    required
-                                    value={formData.start_date}
-                                    onChange={(e) => setFormData((prev) => ({ ...prev, start_date: e.target.value }))}
-                                    className="w-full rounded-lg border text-sm text-slate-900 bg-white h-9 px-3 outline-none transition-colors border-slate-200 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
-                                />
-                            </div>
-                            <div className="flex flex-col gap-1.5">
-                                <label className="text-sm font-medium text-slate-700">Ngày kết thúc</label>
-                                <input
-                                    type="date"
-                                    required
-                                    value={formData.end_date}
-                                    min={formData.start_date || undefined}
-                                    onChange={(e) => setFormData((prev) => ({ ...prev, end_date: e.target.value }))}
-                                    className="w-full rounded-lg border text-sm text-slate-900 bg-white h-9 px-3 outline-none transition-colors border-slate-200 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
-                                />
-                            </div>
+                            <Input
+                                label="Ngày bắt đầu"
+                                type="date"
+                                required
+                                value={formData.start_date}
+                                onChange={(e) => setFormData((prev) => ({ ...prev, start_date: e.target.value }))}
+                            />
+                            <Input
+                                label="Ngày kết thúc"
+                                type="date"
+                                required
+                                value={formData.end_date}
+                                min={formData.start_date || undefined}
+                                onChange={(e) => setFormData((prev) => ({ ...prev, end_date: e.target.value }))}
+                            />
                         </div>
                         <div className="flex justify-end gap-2 pt-1">
                             <Button type="button" variant="secondary" size="sm" onClick={resetForm}>

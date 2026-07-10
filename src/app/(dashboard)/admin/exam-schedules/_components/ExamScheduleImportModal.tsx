@@ -1,10 +1,9 @@
-'use client'
+"use client";
 
-import { Button } from "@/components/ui/Button";
-import { Modal } from "@/components/ui/Modal";
+import { ImportModal } from "@/components/shared/ImportModal";
 import api from "@/lib/api";
-import { useState } from "react";
-import toast from "react-hot-toast";
+import { ExamPeriod } from "@/types";
+import { useEffect, useState } from "react";
 
 export interface ExamScheduleImportModalProps {
     open: boolean;
@@ -13,60 +12,49 @@ export interface ExamScheduleImportModalProps {
 }
 
 export function ExamScheduleImportModal({ open, onClose, onSuccess }: ExamScheduleImportModalProps) {
-    const [file, setFile] = useState<File | null>(null);
-    const [loading, setLoading] = useState(false);
+    const [examPeriods, setExamPeriods] = useState<ExamPeriod[]>([]);
+    const [selectedPeriodId, setSelectedPeriodId] = useState("");
 
-    const handleImport = async () => {
-        if (!file) return toast.error("Vui lòng chọn file excel");
-
-        const formData = new FormData();
-        formData.append("file", file);
-
-        setLoading(true);
-        try {
-            const res = await api.post("/exam-schedules/import", formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data',
-                }
-            });
-            toast.success(res.data.message);
-            onSuccess();
-            onClose();
-        } catch (err: any) {
-            toast.error("Lỗi khi import dữ liệu");
-        } finally {
-            setLoading(false);
+    useEffect(() => {
+        if (open) {
+            api.get('/exam-periods', { params: { limit: 1000 } })
+                .then(res => setExamPeriods(res.data?.data || []))
+                .catch(err => console.error("Lỗi lấy danh sách đợt thi", err));
+            setSelectedPeriodId("");
         }
-    };
+    }, [open]);
+
     return (
-        <Modal
+        <ImportModal
             open={open}
             onClose={onClose}
+            onSuccess={onSuccess}
             title="Import ca thi từ Excel"
-            footer={
-                <>
-                    <Button variant="secondary" onClick={onClose}>Hủy</Button>
-                    <Button variant="primary" loading={loading} onClick={handleImport}>Bắt đầu Import</Button>
-                </>
-            }
+            endpoint="/exam-schedules/import"
+            extraPayload={selectedPeriodId ? { exam_period_id: selectedPeriodId } : undefined}
+            isSubmitDisabled={!selectedPeriodId}
+            templateUrl="/templateExcel/ExamSchedule.xlsx"
         >
-            <div className="space-y-6 py-2">
-                <div className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center hover:border-blue-400 transition-colors">
-                    <input
-                        type="file"
-                        accept=".xlsx, .xls"
-                        onChange={(e) => setFile(e.target.files?.[0] || null)}
-                        className="hidden"
-                        id="excel-upload"
-                    />
-                    <label htmlFor="excel-upload" className="cursor-pointer">
-                        <div className="text-slate-500 mb-2">
-                            {file ? <span className="text-blue-600 font-medium">{file.name}</span> : "Kéo thả hoặc click để chọn file Excel"}
-                        </div>
-                        <p className="text-xs text-slate-400">Hỗ trợ định dạng .xlsx, .xls</p>
-                    </label>
-                </div>
+            <div className="space-y-2 mt-4 p-4 bg-slate-50 border border-slate-800 rounded-xl">
+                <label className="text-sm font-semibold text-slate-700">
+                    Đợt thi <span className="text-red-500">*</span>
+                </label>
+                <select
+                    className="w-full px-3 py-2 border border-slate-800 rounded-lg text-sm font-medium text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-800 focus:border-blue-800 transition-colors"
+                    value={selectedPeriodId}
+                    onChange={(e) => setSelectedPeriodId(e.target.value)}
+                >
+                    <option value="" disabled className="text-slate-400">
+                        -- Chọn đợt thi cho các ca thi sắp import --
+                    </option>
+                    {examPeriods.map((p) => (
+                        <option key={p.id} value={p.id}>
+                            {p.name}
+                        </option>
+                    ))}
+                </select>
+                <p className="text-xs text-slate-400 mt-1">Các ca thi trong file sẽ được liên kết vào đợt thi này. Ca thi có ngày nằm ngoài thời gian đợt thi sẽ bị từ chối.</p>
             </div>
-        </Modal>
-    )
+        </ImportModal>
+    );
 }

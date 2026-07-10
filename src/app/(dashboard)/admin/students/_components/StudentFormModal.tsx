@@ -216,7 +216,6 @@ export function StudentFormModal({ open, student, onClose, onSuccess }: StudentF
                 const payload = {
                     last_name: formData.last_name,
                     first_name: formData.first_name,
-                    email: formData.email,
                     phone: formData.phone,
                     class_code: formData.class_code,
                     user_id: formData.user_id === "" ? null : formData.user_id,
@@ -326,13 +325,6 @@ export function StudentFormModal({ open, student, onClose, onSuccess }: StudentF
                     value={formData.first_name}
                     onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
                     placeholder="A"
-                />
-                <Input
-                    label="Email"
-                    required
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    placeholder="Email sinh viên"
                 />
                 <Input
                     label="Số điện thoại"

@@ -99,10 +99,15 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
     const handleVideoPlay = () => {
         if (!videoRef.current || !canvasRef.current || !isModelLoaded) return;
 
+        if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+        }
+
         const video = videoRef.current;
         const canvas = canvasRef.current;
 
         intervalRef.current = setInterval(async () => {
+            if (video.paused || video.ended) return;
             if (video.videoWidth === 0 || video.videoHeight === 0) return;
 
             const displaySize = { width: video.videoWidth, height: video.videoHeight };
@@ -141,6 +146,7 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
         setResults([]); // Xoá kết quả cũ trước khi điểm danh lượt mới
 
         const video = videoRef.current;
+        video.pause(); // Freeze the camera frame
 
         try {
             // Phát hiện tất cả faces
@@ -194,6 +200,9 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
             toast.error("Có lỗi xảy ra khi xử lý điểm danh");
         } finally {
             setIsCheckingIn(false);
+            if (videoRef.current) {
+                videoRef.current.play().catch(e => console.error("Cannot resume video", e));
+            }
         }
     }, [schedule.id]); // eslint-disable-line react-hooks/exhaustive-deps
 

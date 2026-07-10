@@ -91,3 +91,23 @@ export function formatDateVN(dateStr: string): string {
 export function addDays(dateStr: string, delta: number): string {
     return dayjs(dateStr).add(delta, 'day').format('YYYY-MM-DD');
 }
+
+/** Lấy thứ trong tuần theo tiếng Việt (Thứ 2 → CN) */
+export function getDayOfWeekVN(value: string | Date): string {
+    if (!value) return '';
+    const day = dayjs(value).tz('Asia/Ho_Chi_Minh').day(); // 0=CN, 1=T2,...,6=T7
+    const map = ['CN', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
+    return map[day];
+}
+
+/** Format ngày theo dd/MM/yyyy */
+export function formatDateShort(value: string | Date): string {
+    if (!value) return '';
+    return dayjs(value).tz('Asia/Ho_Chi_Minh').format('DD/MM/YYYY');
+}
+
+/** Chuyển UTC Date/string sang YYYY-MM-DD (Local VN) dùng cho thẻ <input type="date"> */
+export function toYMD(value: string | Date): string {
+    if (!value) return '';
+    return dayjs(value).tz('Asia/Ho_Chi_Minh').format('YYYY-MM-DD');
+}

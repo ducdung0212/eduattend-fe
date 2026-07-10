@@ -13,6 +13,7 @@ import { ExamSupervisorModal } from "./_components/ExamSupervisorModal";
 import { AttendanceRecordModal } from "./_components/AttendanceRecordModal";
 import { ExamScheduleGridView } from "./_components/ExamScheduleGridView";
 import { ExamPeriodManagerModal } from "./_components/ExamPeriodManagerModal";
+import { Input } from "@/components/ui/Input";
 
 export default function ExamScheduleManagementPage() {
     // --- State Modals ---
@@ -160,18 +161,19 @@ export default function ExamScheduleManagementPage() {
                         >
                             ›
                         </button>
-                        <input
+                        <Input
                             type="date"
                             value={gridDate}
                             onChange={(e) => setGridDate(e.target.value)}
-                            className="h-8 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                            className="h-8"
                         />
-                        <button
+                        <Button
+                            variant="secondary"
                             onClick={() => setGridDate(todayString())}
-                            className="h-8 px-3 text-sm rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                            className="h-8"
                         >
                             Hôm nay
-                        </button>
+                        </Button>
                     </div>
                 </div>
 

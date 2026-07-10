@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 export interface Column<T> {
   key: string;
   label: string;
-  render?: (row: T) => ReactNode;
+  render?: (row: T, index: number) => ReactNode;
   align?: 'left' | 'right' | 'center';
   className?: string;
 }
@@ -71,7 +71,7 @@ export function DataTable<T>({
               </td>
             </tr>
           ) : (
-            data.map((row) => (
+            data.map((row, index) => (
               <tr
                 key={rowKey(row)}
                 className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60 transition-colors"
@@ -81,7 +81,7 @@ export function DataTable<T>({
                     key={col.key}
                     className={cn('px-4 py-3.5 text-slate-700', ALIGN[col.align ?? 'left'], col.className)}
                   >
-                    {col.render ? col.render(row) : String((row as Record<string, unknown>)[col.key] ?? '—')}
+                    {col.render ? col.render(row, index) : String((row as Record<string, unknown>)[col.key] ?? '—')}
                   </td>
                 ))}
               </tr>
@@ -91,4 +91,4 @@ export function DataTable<T>({
       </table>
     </div>
   );
-}
+}
