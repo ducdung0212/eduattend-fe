@@ -14,21 +14,21 @@ export function cn(...inputs: ClassValue[]) {
 
 /** Format ngày theo kiểu Việt Nam */
 export function toVNDatetimeLocal(value: string | Date): string {
-    if (!value) return '';
-    return dayjs(value).tz('Asia/Ho_Chi_Minh').format('YYYY-MM-DDTHH:mm');
+  if (!value) return '';
+  return dayjs(value).tz('Asia/Ho_Chi_Minh').format('YYYY-MM-DDTHH:mm');
 }
 
 /** Chuyển từ string của thẻ <input type="datetime-local"> (Giờ VN) sang UTC ISO string để gửi lên BE */
 export function fromVNDatetimeLocalToUTC(localStr: string): string {
-    if (!localStr) return '';
-    return dayjs.tz(localStr, 'Asia/Ho_Chi_Minh').utc().toISOString();
+  if (!localStr) return '';
+  return dayjs.tz(localStr, 'Asia/Ho_Chi_Minh').utc().toISOString();
 }
 
 /** Format hiển thị ra màn hình cho người dùng xem */
 export function formatDateTime(value: string | Date): string {
-    if (!value) return '';
-    // Tùy chỉnh format hiển thị ở đây (VD: 09:30 15/06/2026)
-    return dayjs(value).tz('Asia/Ho_Chi_Minh').format('HH:mm DD/MM/YYYY');
+  if (!value) return '';
+  // Tùy chỉnh format hiển thị ở đây (VD: 09:30 15/06/2026)
+  return dayjs(value).tz('Asia/Ho_Chi_Minh').format('HH:mm DD/MM/YYYY');
 }
 /** Lấy 2 chữ cái đầu của tên (dùng cho avatar) */
 export function getInitials(name: string): string {
@@ -65,49 +65,61 @@ export function debounce<T extends (...args: unknown[]) => void>(fn: T, ms: numb
     timer = setTimeout(() => fn(...args), ms);
   }) as T;
 }
+
+// Tách "Họ và tên" thành last_name (họ + tên lót) và first_name (tên)
+// Ví dụ: "Nguyễn Văn A" -> last_name: "Nguyễn Văn", first_name: "A"
+export const splitFullName = (value: string) => {
+  const trimmed = value.trim().replace(/\s+/g, " ");
+  if (!trimmed) return { last_name: "", first_name: "" };
+  const parts = trimmed.split(" ");
+  const first_name = parts.pop() as string;
+  const last_name = parts.join(" ");
+  return { last_name, first_name };
+};
+
 /**Ghep thanh ho va ten */
 export const fullName = (person: { last_name?: string; first_name?: string } | null) =>
-    `${person?.last_name ?? ""} ${person?.first_name ?? ""}`.trim();
+  `${person?.last_name ?? ""} ${person?.first_name ?? ""}`.trim();
 
 /** Format chỉ giờ:phút theo giờ VN (VD: "09:30") */
 export function formatTime(value: string | Date): string {
-    if (!value) return '';
-    return dayjs(value).tz('Asia/Ho_Chi_Minh').format('HH:mm');
+  if (!value) return '';
+  return dayjs(value).tz('Asia/Ho_Chi_Minh').format('HH:mm');
 }
 
 /** Lấy ngày hôm nay dạng yyyy-MM-dd (local VN) */
 export function todayString(): string {
-    return dayjs().tz('Asia/Ho_Chi_Minh').format('YYYY-MM-DD');
+  return dayjs().tz('Asia/Ho_Chi_Minh').format('YYYY-MM-DD');
 }
 
 /** Format ngày theo kiểu VN dài (VD: "thứ ba, 24/06/2026") */
 export function formatDateVN(dateStr: string): string {
-    if (!dateStr) return '';
-    const d = new Date(dateStr + 'T00:00:00');
-    return d.toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 /** Cộng/trừ ngày từ chuỗi yyyy-MM-dd, trả về yyyy-MM-dd */
 export function addDays(dateStr: string, delta: number): string {
-    return dayjs(dateStr).add(delta, 'day').format('YYYY-MM-DD');
+  return dayjs(dateStr).add(delta, 'day').format('YYYY-MM-DD');
 }
 
 /** Lấy thứ trong tuần theo tiếng Việt (Thứ 2 → CN) */
 export function getDayOfWeekVN(value: string | Date): string {
-    if (!value) return '';
-    const day = dayjs(value).tz('Asia/Ho_Chi_Minh').day(); // 0=CN, 1=T2,...,6=T7
-    const map = ['CN', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
-    return map[day];
+  if (!value) return '';
+  const day = dayjs(value).tz('Asia/Ho_Chi_Minh').day(); // 0=CN, 1=T2,...,6=T7
+  const map = ['CN', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
+  return map[day];
 }
 
 /** Format ngày theo dd/MM/yyyy */
 export function formatDateShort(value: string | Date): string {
-    if (!value) return '';
-    return dayjs(value).tz('Asia/Ho_Chi_Minh').format('DD/MM/YYYY');
+  if (!value) return '';
+  return dayjs(value).tz('Asia/Ho_Chi_Minh').format('DD/MM/YYYY');
 }
 
 /** Chuyển UTC Date/string sang YYYY-MM-DD (Local VN) dùng cho thẻ <input type="date"> */
 export function toYMD(value: string | Date): string {
-    if (!value) return '';
-    return dayjs(value).tz('Asia/Ho_Chi_Minh').format('YYYY-MM-DD');
+  if (!value) return '';
+  return dayjs(value).tz('Asia/Ho_Chi_Minh').format('YYYY-MM-DD');
 }

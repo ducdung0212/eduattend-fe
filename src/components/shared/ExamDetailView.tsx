@@ -11,6 +11,7 @@ import { formatTime, formatDateTime, todayString } from "@/lib/utils";
 import { ExamSchedule, AttendanceRecord, ExamSupervisor } from "@/types";
 import { useCallback, useEffect, useState, useMemo } from "react";
 import toast from "react-hot-toast";
+import * as XLSX from "xlsx";
 
 interface Props {
     schedule: ExamSchedule;
@@ -23,11 +24,6 @@ export function ExamDetailView({ schedule, onBack }: Props) {
     const [supervisors, setSupervisors] = useState<ExamSupervisor[]>([]);
     const [loadingRecords, setLoadingRecords] = useState(true);
     const [loadingSupervisors, setLoadingSupervisors] = useState(true);
-
-    // ── Tìm kiếm SV trong ngày ──────────────────────
-    const [studentSearch, setStudentSearch] = useState("");
-    const [studentSearchResults, setStudentSearchResults] = useState<ExamSchedule[]>([]);
-    const [searchingStudent, setSearchingStudent] = useState(false);
 
     // ── Trạng thái sắp xếp tên ───────────────────────
     const [nameSortDir, setNameSortDir] = useState<'asc' | 'desc'>('asc');
@@ -74,32 +70,6 @@ export function ExamDetailView({ schedule, onBack }: Props) {
         fetchSupervisors();
     }, [fetchRecords, fetchSupervisors]);
 
-    // Tìm kiếm sinh viên trong ngày
-    useEffect(() => {
-        if (!studentSearch.trim()) {
-            setStudentSearchResults([]);
-            return;
-        }
-        const t = setTimeout(async () => {
-            setSearchingStudent(true);
-            try {
-                const today = todayString();
-                const res = await api.get("/exam-schedules", {
-                    params: {
-                        start_time: today,
-                        search: studentSearch,
-                        limit: 50,
-                    },
-                });
-                setStudentSearchResults(res.data?.data ?? []);
-            } catch {
-                console.error("Lỗi khi tìm kiếm sinh viên");
-            } finally {
-                setSearchingStudent(false);
-            }
-        }, 400);
-        return () => clearTimeout(t);
-    }, [studentSearch]);
 
     // Đếm đã điểm danh
     const attendedCount = records.filter((r) => r.attendance_time).length;
@@ -132,6 +102,34 @@ export function ExamDetailView({ schedule, onBack }: Props) {
     const totalPages = Math.ceil(sortedRecords.length / 20);
     const { page, limit, setPage } = usePagination(totalPages, { initialLimit: 20 });
     const paginatedRecords = sortedRecords.slice((page - 1) * limit, page * limit);
+
+    // Xuất Excel
+    const exportToExcel = () => {
+        const data = sortedRecords.map((r, index) => ({
+            "STT": index + 1,
+            "Mã SV": r.student?.student_code || "",
+            "Họ tên": `${r.student?.last_name || ""} ${r.student?.first_name || ""}`.trim(),
+            "Lớp": r.student?.class?.name || r.student?.class?.class_code || "",
+            "Trạng thái": r.attendance_time ? "Đã điểm danh" : "Chờ điểm danh",
+            "Thời gian điểm danh": r.attendance_time ? formatDateTime(r.attendance_time) : ""
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "DanhSachDiemDanh");
+        
+        // Căn chỉnh độ rộng cột
+        ws['!cols'] = [
+            { wch: 5 },  // STT
+            { wch: 15 }, // Mã SV
+            { wch: 30 }, // Họ tên
+            { wch: 15 }, // Lớp
+            { wch: 20 }, // Trạng thái
+            { wch: 25 }  // Thời gian
+        ];
+
+        XLSX.writeFile(wb, `DiemDanh_${schedule.subject?.subject_code || "CaThi"}_Nhom${schedule.group || ""}.xlsx`);
+    };
 
     return (
         <div className="space-y-5">
@@ -236,66 +234,22 @@ export function ExamDetailView({ schedule, onBack }: Props) {
                 </Button>
             </div>
 
-            {/* Tìm kiếm SV trong ngày */}
-            <div className="bg-white border border-slate-200/70 rounded-xl overflow-hidden">
-                <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
-                    <i className="ti ti-search text-violet-600" />
-                    <h4 className="text-sm font-semibold text-slate-900">Tra cứu sinh viên trong ngày</h4>
-                </div>
-                <div className="p-4 space-y-3">
-                    <SearchBar
-                        value={studentSearch}
-                        onChange={setStudentSearch}
-                        placeholder="Nhập mã SV hoặc tên để xem thuộc ca thi nào..."
-                        className="max-w-full"
-                    />
-
-                    {searchingStudent && (
-                        <div className="text-sm text-slate-400 text-center py-2 flex items-center justify-center gap-2">
-                            <span className="w-4 h-4 border-2 border-slate-200 border-t-blue-500 rounded-full animate-spin" />
-                            Đang tìm kiếm...
-                        </div>
-                    )}
-
-                    {!searchingStudent && studentSearch.trim() && studentSearchResults.length === 0 && (
-                        <div className="text-sm text-slate-400 text-center py-2">
-                            Không tìm thấy kết quả cho "{studentSearch}"
-                        </div>
-                    )}
-
-                    {studentSearchResults.length > 0 && (
-                        <div className="space-y-2">
-                            {studentSearchResults.map((s) => {
-                                const sStart = formatTime(s.start_time);
-                                const sEnd = formatTime(new Date(new Date(s.start_time).getTime() + (s.duration ?? 120) * 60000));
-                                return (
-                                    <div key={s.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-slate-50 border border-slate-100 text-sm">
-                                        <div className="w-8 h-8 rounded-full bg-violet-50 flex items-center justify-center shrink-0">
-                                            <i className="ti ti-book text-violet-600 text-sm" />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="font-medium text-slate-900 truncate">{s.subject?.name}</div>
-                                            <div className="text-xs text-slate-500">
-                                                {s.subject?.subject_code} · Nhóm {s.group} · Phòng {s.room?.name} · {sStart} – {sEnd}
-                                            </div>
-                                        </div>
-                                        <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 shrink-0">
-                                            {s.attendance_count ?? 0} SV
-                                        </span>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-                </div>
-            </div>
-
             {/* Danh sách thí sinh */}
             <div className="bg-white border border-slate-200/70 rounded-xl overflow-hidden">
-                <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
+                <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2 flex-wrap">
                     <i className="ti ti-list-check text-emerald-600" />
                     <h4 className="text-sm font-semibold text-slate-900">Danh sách thí sinh</h4>
                     <div className="ml-auto flex items-center gap-2">
+                        <Button 
+                            variant="secondary" 
+                            size="sm" 
+                            leftIcon="file-spreadsheet"
+                            onClick={exportToExcel}
+                            disabled={records.length === 0}
+                            className="h-6 text-[11px] font-medium px-2 py-0 border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300"
+                        >
+                            Xuất Excel
+                        </Button>
                         <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
                             {attendedCount} đã điểm danh
                         </span>

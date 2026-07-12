@@ -2,12 +2,13 @@
 
 import { Button } from "@/components/ui/Button";
 import api from "@/lib/api";
-import { formatTime } from "@/lib/utils";
+import { formatTime, todayString } from "@/lib/utils";
 import { ExamSchedule } from "@/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import * as faceapi from "face-api.js";
 import { Modal } from "@/components/ui/Modal";
+import { SearchBar } from "./SearchBar";
 
 interface Props {
     open: boolean;
@@ -28,6 +29,12 @@ interface CheckInResult {
 }
 
 export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props) {
+
+    // ── Tìm kiếm SV trong ngày ──────────────────────
+    const [studentSearch, setStudentSearch] = useState("");
+    const [studentSearchResults, setStudentSearchResults] = useState<ExamSchedule[]>([]);
+    const [searchingStudent, setSearchingStudent] = useState(false);
+
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
@@ -45,6 +52,32 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
     const endDate = new Date(new Date(schedule.start_time).getTime() + (schedule.duration ?? 120) * 60000);
     const endStr = formatTime(endDate);
 
+    useEffect(() => {
+        if (!studentSearch.trim()) {
+            setStudentSearchResults([]);
+            return;
+        }
+        const t = setTimeout(async () => {
+            setSearchingStudent(true);
+            try {
+                const today = todayString();
+                const res = await api.get("/exam-schedules", {
+                    params: {
+                        start_time: today,
+                        search: studentSearch,
+                        limit: 50,
+                    },
+                });
+                setStudentSearchResults(res.data?.data ?? []);
+            } catch {
+                console.error("Lỗi khi tìm kiếm sinh viên");
+            } finally {
+                setSearchingStudent(false);
+            }
+        }, 400);
+        return () => clearTimeout(t);
+    }, [studentSearch]);
+
     // Bật camera khi modal mở
     useEffect(() => {
         if (open) {
@@ -57,6 +90,8 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
             stopCamera();
         };
     }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    
 
     const startCamera = async (currentFacingMode: "environment" | "user" = facingMode) => {
         setIsLoadingAI(true);
@@ -139,6 +174,8 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
             }
         }, 150);
     };
+
+    
 
     // Chụp ảnh & Điểm danh (hỗ trợ multi-face bằng cách crop)
     const handleCheckIn = useCallback(async () => {
@@ -320,6 +357,60 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
                         ref={canvasRef}
                         className="absolute top-0 left-0 w-full h-full object-cover pointer-events-none"
                     />
+                </div>
+
+                {/* Tìm kiếm SV trong ngày */}
+                <div className="bg-white border border-slate-200/70 rounded-xl overflow-hidden">
+                    <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
+                        <i className="ti ti-search text-violet-600" />
+                        <h4 className="text-sm font-semibold text-slate-900">Tra cứu sinh viên trong ngày</h4>
+                    </div>
+                    <div className="p-4 space-y-3">
+                        <SearchBar
+                            value={studentSearch}
+                            onChange={setStudentSearch}
+                            placeholder="Nhập mã SV hoặc tên để xem thuộc ca thi nào..."
+                            className="max-w-full"
+                        />
+
+                        {searchingStudent && (
+                            <div className="text-sm text-slate-400 text-center py-2 flex items-center justify-center gap-2">
+                                <span className="w-4 h-4 border-2 border-slate-200 border-t-blue-500 rounded-full animate-spin" />
+                                Đang tìm kiếm...
+                            </div>
+                        )}
+
+                        {!searchingStudent && studentSearch.trim() && studentSearchResults.length === 0 && (
+                            <div className="text-sm text-slate-400 text-center py-2">
+                                Không tìm thấy kết quả cho "{studentSearch}"
+                            </div>
+                        )}
+
+                        {studentSearchResults.length > 0 && (
+                            <div className="space-y-2">
+                                {studentSearchResults.map((s) => {
+                                    const sStart = formatTime(s.start_time);
+                                    const sEnd = formatTime(new Date(new Date(s.start_time).getTime() + (s.duration ?? 120) * 60000));
+                                    return (
+                                        <div key={s.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-slate-50 border border-slate-100 text-sm">
+                                            <div className="w-8 h-8 rounded-full bg-violet-50 flex items-center justify-center shrink-0">
+                                                <i className="ti ti-book text-violet-600 text-sm" />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="font-medium text-slate-900 truncate">{s.subject?.name}</div>
+                                                <div className="text-xs text-slate-500">
+                                                    {s.subject?.subject_code} · Nhóm {s.group} · Phòng {s.room?.name} · {sStart} – {sEnd}
+                                                </div>
+                                            </div>
+                                            <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 shrink-0">
+                                                {s.attendance_count ?? 0} SV
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Nút chụp */}

@@ -8,6 +8,7 @@ import { Class, Faculty, Student } from "@/types";
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import toast from "react-hot-toast";
 import { IconCamera, IconTrash } from "@tabler/icons-react";
+import { splitFullName } from "@/lib/utils";
 
 interface StudentFormModalProps {
     open: boolean;
@@ -27,6 +28,8 @@ export function StudentFormModal({ open, student, onClose, onSuccess }: StudentF
         create_account: false,
         user_id: "",
     });
+
+    const [fullName, setFullName] = useState("");
 
     const [photoFile, setPhotoFile] = useState<File | null>(null);
     const [photoPreview, setPhotoPreview] = useState<string>("");
@@ -81,6 +84,7 @@ export function StudentFormModal({ open, student, onClose, onSuccess }: StudentF
                 setSearchTerm(student.user?.email || "");
                 setPhotoPreview(student.photos?.[0]?.image_url || "");
                 setPhotoFile(null);
+                setFullName(`${student.last_name} ${student.first_name}`.trim());
             } else {
                 setFormData({
                     student_code: "",
@@ -93,6 +97,7 @@ export function StudentFormModal({ open, student, onClose, onSuccess }: StudentF
                     user_id: "",
                 });
                 setSearchTerm("");
+                setFullName("");
                 setSelectedFacultyCode("");
                 setClassSearch("");
                 setPhotoPreview("");
@@ -161,6 +166,12 @@ export function StudentFormModal({ open, student, onClose, onSuccess }: StudentF
         return () => clearTimeout(t);
     }, [fetchUsers, searchTerm]);
 
+    const handleFullNameChange = (value: string) => {
+        setFullName(value);
+        const { last_name, first_name } = splitFullName(value);
+        setFormData((prev) => ({ ...prev, last_name, first_name }));
+    };
+
     const handleSelectUser = (user: any) => {
         setFormData({ ...formData, user_id: user.id });
         setSearchTerm(user.email);
@@ -216,7 +227,8 @@ export function StudentFormModal({ open, student, onClose, onSuccess }: StudentF
                 const payload = {
                     last_name: formData.last_name,
                     first_name: formData.first_name,
-                    phone: formData.phone,
+                    phone: formData.phone === "" ? null : formData.phone,
+                    email: formData.email === "" ? null : formData.email,
                     class_code: formData.class_code,
                     user_id: formData.user_id === "" ? null : formData.user_id,
                 };
@@ -224,7 +236,13 @@ export function StudentFormModal({ open, student, onClose, onSuccess }: StudentF
                 await uploadPhoto(student.student_code);
                 toast.success("Cập nhật sinh viên thành công");
             } else {
-                const res = await api.post("/students", formData);
+                const payload = {
+                    ...formData,
+                    phone: formData.phone === "" ? undefined : formData.phone,
+                    email: formData.email === "" ? undefined : formData.email,
+                    user_id: formData.user_id === "" ? null : formData.user_id,
+                };
+                const res = await api.post("/students", payload);
                 const newStudentCode = res.data?.data?.student_code || formData.student_code;
                 await uploadPhoto(newStudentCode);
                 toast.success("Thêm sinh viên thành công");
@@ -313,24 +331,17 @@ export function StudentFormModal({ open, student, onClose, onSuccess }: StudentF
                     placeholder="Ví dụ: DH52200001"
                 />
                 <Input
-                    label="Họ và tên lót"
+                    label="Họ và tên"
                     required
-                    value={formData.last_name}
-                    onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-                    placeholder="Nguyễn Văn..."
-                />
-                <Input
-                    label="Tên"
-                    required
-                    value={formData.first_name}
-                    onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-                    placeholder="A"
+                    value={fullName}
+                    onChange={(e) => handleFullNameChange(e.target.value)}
+                    placeholder="Nhập họ và tên"
                 />
                 <Input
                     label="Số điện thoại"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    placeholder="0123456789"
+                    placeholder="Nhập số điện thoại"
                 />
 
                 {/* Chọn khoa */}

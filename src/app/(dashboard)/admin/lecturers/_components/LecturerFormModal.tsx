@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import api from "@/lib/api";
+import { splitFullName } from "@/lib/utils";
 import { Faculty, Lecturer } from "@/types";
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import toast from "react-hot-toast";
@@ -27,6 +28,8 @@ export function LecturerFormModal({ open, lecturer, onClose, onSuccess }: Lectur
         user_id: "", 
     });
 
+    const [fullName, setFullName] = useState("");
+    
     const [submitting, setSubmitting] = useState(false);
     const [faculties, setFaculties] = useState<Faculty[]>([]);
 
@@ -63,6 +66,7 @@ export function LecturerFormModal({ open, lecturer, onClose, onSuccess }: Lectur
                     user_id: lecturer.user?.id ?? "", 
                 });
                 setSearchTerm(lecturer.user?.email || "");
+                setFullName(`${lecturer.last_name} ${lecturer.first_name}`.trim());
             } else {
                 setFormData({
                     lecturer_code: "",
@@ -75,6 +79,7 @@ export function LecturerFormModal({ open, lecturer, onClose, onSuccess }: Lectur
                     user_id: "", 
                 });
                 setSearchTerm("");
+                setFullName("");
             }
             setSearchedUsers([]);
             setShowDropdown(false);
@@ -118,6 +123,11 @@ export function LecturerFormModal({ open, lecturer, onClose, onSuccess }: Lectur
         return () => clearTimeout(t);
     }, [fetchUsers, searchTerm]);
 
+    const handleFullNameChange=(value:string)=>{
+        setFullName(value);
+        const {last_name,first_name}=splitFullName(value);
+        setFormData((prev)=>({...prev,last_name,first_name}))
+    }
 
     const handleSelectUser = (user: any) => {
         setFormData({ ...formData, user_id: user.id });
@@ -134,14 +144,19 @@ export function LecturerFormModal({ open, lecturer, onClose, onSuccess }: Lectur
                     last_name: formData.last_name,
                     first_name: formData.first_name,
                     email: formData.email,
-                    phone: formData.phone,
+                    phone: formData.phone===""?undefined:formData.phone,
                     faculty_code: formData.faculty_code,
                     user_id: formData.user_id === "" ? null : formData.user_id, 
                 };
                 await api.patch(`/lecturers/${lecturer.lecturer_code}`, payload);
                 toast.success("Cập nhật giảng viên thành công");
             } else {
-                await api.post("/lecturers", formData);
+                 const payload = {
+                    ...formData,
+                    phone: formData.phone===""?undefined:formData.phone,
+                    user_id: formData.user_id === "" ? null : formData.user_id, 
+                };
+                await api.post("/lecturers", payload);
                 toast.success("Thêm giảng viên thành công");
             }
             onSuccess();
@@ -180,18 +195,11 @@ export function LecturerFormModal({ open, lecturer, onClose, onSuccess }: Lectur
                     placeholder="Ví dụ: GV001"
                 />
                 <Input
-                    label="Họ và tên lót"
+                    label="Họ và tên"
                     required
-                    value={formData.last_name}
-                    onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-                    placeholder="Nguyễn Văn..."
-                />
-                <Input
-                    label="Tên"
-                    required
-                    value={formData.first_name}
-                    onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-                    placeholder="A"
+                    value={fullName}
+                    onChange={(e) => handleFullNameChange(e.target.value)}
+                    placeholder="Nhập họ và tên..."
                 />
                 <Input
                     label="Email"
@@ -202,10 +210,9 @@ export function LecturerFormModal({ open, lecturer, onClose, onSuccess }: Lectur
                 />
                 <Input
                     label="Số điện thoại"
-                    required
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    placeholder="0123456789"
+                    placeholder="Nhập số điện thoại"
                 />
                 <div className="flex flex-col gap-1.5">
                     <label htmlFor="faculty" className="text-sm font-medium text-slate-700">

@@ -5,6 +5,7 @@ import { Modal } from "@/components/ui/Modal";
 import api from "@/lib/api";
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
+import * as XLSX from "xlsx";
 
 export interface ImportModalProps {
     open: boolean;
@@ -39,6 +40,71 @@ export function ImportModal({
         }
     }, [open]);
 
+    const handleErrorsAndDownload = async (file: File, rawErrors: { row: number, error: string }[]) => {
+        if (!rawErrors || rawErrors.length === 0) return;
+
+        if (!window.confirm("Có lỗi xảy ra trong quá trình Import. Bạn có muốn tải xuống file Excel chứa chi tiết các dòng lỗi không?")) {
+            return;
+        }
+
+        try {
+            const arrayBuffer = await file.arrayBuffer();
+            const workbook = XLSX.read(arrayBuffer);
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+
+            const data: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+            if (data.length > 0) {
+                data[0].push("Lỗi chi tiết");
+            }
+
+            const errorColIndex = data.length > 0 ? data[0].length - 1 : 0;
+
+            const errorMap = new Map();
+            const generalErrors: string[] = [];
+            rawErrors.forEach(err => {
+                if (err.row > 0) {
+                    const index = err.row - 1;
+                    if (errorMap.has(index)) {
+                        errorMap.set(index, errorMap.get(index) + "; " + err.error);
+                    } else {
+                        errorMap.set(index, err.error);
+                    }
+                } else {
+                    generalErrors.push(err.error);
+                }
+            });
+
+            for (let i = 1; i < data.length; i++) {
+                while (data[i].length < errorColIndex) {
+                    data[i].push("");
+                }
+                if (errorMap.has(i)) {
+                    data[i][errorColIndex] = errorMap.get(i);
+                } else {
+                    data[i][errorColIndex] = "";
+                }
+            }
+
+            if (generalErrors.length > 0) {
+                data.push([]);
+                data.push(["Các lỗi chung không xác định dòng:"]);
+                generalErrors.forEach(err => {
+                    data.push([err]);
+                });
+            }
+
+            const newWorksheet = XLSX.utils.aoa_to_sheet(data);
+            const newWorkbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(newWorkbook, newWorksheet, "Errors");
+
+            XLSX.writeFile(newWorkbook, `Danh_sach_loi_import_${new Date().getTime()}.xlsx`);
+        } catch (e) {
+            console.error("Lỗi khi tạo file excel chứa lỗi:", e);
+        }
+    };
+
     const handleImport = async () => {
         if (!file) return toast.error("Vui lòng chọn file excel");
 
@@ -59,12 +125,28 @@ export function ImportModal({
                 },
                 timeout: 300000 // 5 phút để import file lớn
             });
-            toast.success(res.data?.message || "Import thành công");
+            
+            const rawErrors = res.data?.data?.rawErrors;
+            if (rawErrors && rawErrors.length > 0) {
+                toast.error(res.data?.message || "Import hoàn tất với một số lỗi");
+                setTimeout(async () => {
+                    await handleErrorsAndDownload(file, rawErrors);
+                }, 100);
+            } else {
+                toast.success(res.data?.message || "Import thành công");
+            }
             onSuccess();
             onClose();
         } catch (err: any) {
             const msg = err.response?.data?.message || "Lỗi khi import dữ liệu";
             toast.error(Array.isArray(msg) ? msg.join(", ") : msg);
+            
+            const rawErrors = err.response?.data?.data?.rawErrors;
+            if (rawErrors && rawErrors.length > 0) {
+                setTimeout(async () => {
+                    await handleErrorsAndDownload(file, rawErrors);
+                }, 100);
+            }
         } finally {
             setLoading(false);
         }

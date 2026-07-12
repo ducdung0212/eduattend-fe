@@ -9,6 +9,7 @@ import { formatDateTime } from "@/lib/utils";
 import { ExamSchedule, AttendanceRecord } from "@/types";
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
+import * as XLSX from "xlsx";
 
 interface AttendanceRecordModalProps {
     open: boolean;
@@ -95,9 +96,30 @@ export function AttendanceRecordModal({ open, examSchedule, onClose, onSuccess }
             if (success.length > 0) {
                 toast.success(`Đã thêm ${success.length} sinh viên thành công`);
             }
-            failed.forEach((f) => {
-                toast.error(`${f.student_code}: ${f.reason}`);
-            });
+            
+            if (failed.length > 5) {
+                toast.error(`Có ${failed.length} sinh viên bị lỗi, không thể thêm vào ca thi.`);
+                setTimeout(() => {
+                    if (window.confirm(`Có ${failed.length} sinh viên bị lỗi khi thêm vào ca thi. Bạn có muốn tải xuống file Excel chứa chi tiết lỗi không?`)) {
+                        try {
+                            const data = [["Mã SV", "Lỗi chi tiết"]];
+                            failed.forEach((f) => {
+                                data.push([f.student_code, f.reason]);
+                            });
+                            const newWorksheet = XLSX.utils.aoa_to_sheet(data);
+                            const newWorkbook = XLSX.utils.book_new();
+                            XLSX.utils.book_append_sheet(newWorkbook, newWorksheet, "Errors");
+                            XLSX.writeFile(newWorkbook, `Danh_sach_loi_them_sinh_vien_ca_thi_${new Date().getTime()}.xlsx`);
+                        } catch (e) {
+                            console.error("Lỗi khi tạo file excel chứa lỗi:", e);
+                        }
+                    }
+                }, 100);
+            } else {
+                failed.forEach((f) => {
+                    toast.error(`${f.student_code}: ${f.reason}`);
+                });
+            }
 
             if (success.length > 0) {
                 setCodesInput("");
