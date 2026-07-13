@@ -43,9 +43,9 @@ function getColor(subjectCode: string) {
 
 function getSlotIndex(startTime: string): number {
     const h = new Date(startTime).getHours();
-    if (h < 9) return 0;
-    if (h < 12) return 1;
-    if (h < 15) return 2;
+    if (h < 9.5) return 0;
+    if (h < 12.5) return 1;
+    if (h < 15.5) return 2;
     return 3;
 }
 
@@ -102,7 +102,7 @@ function ContextMenu({
             label: "Sửa ca thi",
             icon: <i className="ti ti-edit text-sm" />,
             onClick: () => { onEdit?.(schedule); onClose(); },
-            className: "text-blue-600 hover:bg-blue-50",
+            className: "text-slate-700 hover:bg-slate-50",
         },
         {
             label: "Xóa ca thi",
@@ -114,13 +114,13 @@ function ContextMenu({
             label: "Danh sách thí sinh",
             icon: <i className="ti ti-users text-sm" />,
             onClick: () => { onManageStudents?.(schedule); onClose(); },
-            className: "text-emerald-600 hover:bg-emerald-50",
+            className: "text-slate-700 hover:bg-slate-50",
         },
         {
             label: "Phân công giám thị",
             icon: <i className="ti ti-user-check text-sm" />,
             onClick: () => { onManageSupervisors?.(schedule); onClose(); },
-            className: "text-violet-600 hover:bg-violet-50",
+            className: "text-slate-700 hover:bg-slate-50",
         },
     ];
 
@@ -176,10 +176,10 @@ function ExamCard({
             style={{ background: color.bg, borderLeft: `3.5px solid ${color.border}` }}
         >
             {/* Thời gian */}
-            <div className="flex items-center gap-1 text-[10px] font-medium text-slate-500 tabular-nums">
-                <i className="ti ti-clock text-[10px] text-slate-400 shrink-0" />
+            <div className="flex items-center gap-1 text-[11.5px] font-medium text-slate-500 tabular-nums">
+                <i className="ti ti-clock text-[11px] text-slate-400 shrink-0" />
                 {startStr} – {endStr}
-                <span className="ml-auto text-[9px] bg-black/5 rounded px-1 py-px text-slate-400">
+                <span className="ml-auto text-[10px] bg-black/5 rounded px-1 py-px text-slate-400">
                     {schedule.duration} phút
                 </span>
             </div>
@@ -204,10 +204,10 @@ function ExamCard({
                     {supervisors.map((name, i) => (
                         <div
                             key={i}
-                            className="flex items-center gap-1 text-[10px] text-slate-500 truncate max-w-full"
+                            className="flex items-center gap-1 text-[11.5px] text-slate-500 truncate max-w-full"
                             title={name}
                         >
-                            <i className="ti ti-user text-[9px] text-slate-400 shrink-0" />
+                            <i className="ti ti-user text-[10px] text-slate-400 shrink-0" />
                             {name}
                         </div>
                     ))}

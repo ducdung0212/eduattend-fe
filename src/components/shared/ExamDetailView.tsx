@@ -3,11 +3,13 @@
 import { CheckInCameraView } from "./CheckInCameraView";
 import { Pagination } from "@/components/shared/Pagination";
 import { usePagination } from "@/hooks/usePagination";
+import { DataTable, Column } from "@/components/shared/DataTable";
 
 import { Button } from "@/components/ui/Button";
 import { SearchBar } from "@/components/shared/SearchBar";
+import { Modal } from "@/components/ui/Modal";
 import api from "@/lib/api";
-import { formatTime, formatDateTime, todayString } from "@/lib/utils";
+import { formatTime, formatDateTime } from "@/lib/utils";
 import { ExamSchedule, AttendanceRecord, ExamSupervisor } from "@/types";
 import { useCallback, useEffect, useState, useMemo } from "react";
 import toast from "react-hot-toast";
@@ -27,6 +29,12 @@ export function ExamDetailView({ schedule, onBack }: Props) {
 
     // ── Trạng thái sắp xếp tên ───────────────────────
     const [nameSortDir, setNameSortDir] = useState<'asc' | 'desc'>('asc');
+
+    // ── Search & Filter ─────────────────────────────
+    const [searchQuery, setSearchQuery] = useState("");
+
+    // ── Image Modal ────────────────────────────────
+    const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
     // ── Camera Modal ────────────────────────────────
     const [isCameraOpen, setIsCameraOpen] = useState(false);
@@ -98,10 +106,60 @@ export function ExamDetailView({ schedule, onBack }: Props) {
         });
     }, [records, nameSortDir]);
 
+    // Lọc theo tìm kiếm
+    const filteredRecords = useMemo(() => {
+        if (!searchQuery.trim()) return sortedRecords;
+        const q = searchQuery.toLowerCase();
+        return sortedRecords.filter(r => 
+            r.student?.student_code?.toLowerCase().includes(q) ||
+            r.student?.first_name?.toLowerCase().includes(q) ||
+            r.student?.last_name?.toLowerCase().includes(q)
+        );
+    }, [sortedRecords, searchQuery]);
+
     // Phân trang
-    const totalPages = Math.ceil(sortedRecords.length / 20);
+    const totalPages = Math.ceil(filteredRecords.length / 20);
     const { page, limit, setPage } = usePagination(totalPages, { initialLimit: 20 });
-    const paginatedRecords = sortedRecords.slice((page - 1) * limit, page * limit);
+    const paginatedRecords = filteredRecords.slice((page - 1) * limit, page * limit);
+
+    // Thay đổi trạng thái điểm danh thủ công
+    const handleUpdateStatus = async (record: AttendanceRecord) => {
+        const isCheckedIn = !!record.attendance_time;
+        const newTime = isCheckedIn ? null : new Date().toISOString();
+        
+        // Optimistic update: cập nhật state ngay lập tức để giao diện phản hồi nhanh
+        setRecords(prev => prev.map(r => r.id === record.id ? { ...r, attendance_time: newTime as any } : r));
+
+        try {
+            await api.patch(`/attendance-records/${record.id}`, {
+                attendance_time: newTime,
+            });
+            toast.success(isCheckedIn ? "Đã hủy điểm danh" : "Đã điểm danh");
+        } catch (err: any) {
+            // Rollback nếu API thất bại
+            setRecords(prev => prev.map(r => r.id === record.id ? { ...r, attendance_time: record.attendance_time } : r));
+            toast.error("Không thể cập nhật trạng thái");
+        }
+    };
+
+    // Cập nhật ghi chú
+    const handleUpdateNote = async (record: AttendanceRecord, newNote: string) => {
+        if (record.note === newNote) return;
+
+        // Optimistic update
+        setRecords(prev => prev.map(r => r.id === record.id ? { ...r, note: newNote } : r));
+
+        try {
+            await api.patch(`/attendance-records/${record.id}`, {
+                note: newNote,
+            });
+            toast.success("Đã lưu ghi chú");
+        } catch (err: any) {
+            // Rollback nếu API thất bại
+            setRecords(prev => prev.map(r => r.id === record.id ? { ...r, note: record.note } : r));
+            toast.error("Không thể lưu ghi chú");
+        }
+    };
 
     // Xuất Excel
     const exportToExcel = () => {
@@ -130,6 +188,103 @@ export function ExamDetailView({ schedule, onBack }: Props) {
 
         XLSX.writeFile(wb, `DiemDanh_${schedule.subject?.subject_code || "CaThi"}_Nhom${schedule.group || ""}.xlsx`);
     };
+
+    // --- Định nghĩa Cột cho DataTable ---
+    const columns: Column<AttendanceRecord>[] = [
+        {
+            key: 'index',
+            label: '#',
+            className: 'w-10 text-slate-400 text-xs',
+            render: (_, idx) => (page - 1) * limit + idx + 1,
+        },
+        {
+            key: 'student_code',
+            label: 'Mã SV',
+            className: 'font-medium text-slate-900',
+            render: (r) => r.student?.student_code || '—',
+        },
+        {
+            key: 'photo',
+            label: 'Ảnh gốc',
+            align: 'center',
+            render: (r) => {
+                const hasPhoto = r.student?.photos && r.student.photos.length > 0;
+                return hasPhoto ? (
+                    <button
+                        onClick={() => setSelectedImage(r.student.photos![0].image_url)}
+                        className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-100 text-slate-500 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                        title="Xem ảnh gốc"
+                    >
+                        <i className="ti ti-photo text-sm" />
+                    </button>
+                ) : (
+                    <span className="text-slate-300 text-xs">—</span>
+                );
+            },
+        },
+        {
+            key: 'name',
+            label: (
+                <div 
+                    className="flex items-center gap-1 cursor-pointer hover:text-slate-600 transition-colors"
+                    onClick={() => setNameSortDir(prev => prev === 'asc' ? 'desc' : 'asc')}
+                >
+                    Họ tên
+                    <i className={`ti ti-sort-${nameSortDir === 'asc' ? 'ascending' : 'descending'} text-slate-400`} />
+                </div>
+            ),
+            render: (r) => <span className="text-slate-700">{`${r.student?.last_name || ''} ${r.student?.first_name || ''}`}</span>,
+        },
+        {
+            key: 'class',
+            label: 'Lớp',
+            className: 'text-slate-500 text-xs',
+            render: (r) => r.student?.class?.name || r.student?.class?.class_code || '—',
+        },
+        {
+            key: 'status',
+            label: 'Trạng thái',
+            align: 'center',
+            render: (r) => (
+                <button
+                    onClick={() => handleUpdateStatus(r)}
+                    className="hover:opacity-80 transition-opacity focus:outline-none"
+                >
+                    {r.attendance_time ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <i className="ti ti-check text-xs" />
+                            Đã điểm danh
+                        </span>
+                    ) : (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                            <i className="ti ti-clock text-xs" />
+                            Chờ điểm danh
+                        </span>
+                    )}
+                </button>
+            ),
+        },
+        {
+            key: 'note',
+            label: 'Ghi chú',
+            render: (r) => (
+                <input
+                    type="text"
+                    defaultValue={r.note || ""}
+                    onBlur={(e) => handleUpdateNote(r, e.target.value)}
+                    placeholder="Thêm ghi chú..."
+                    className="w-full min-w-[120px] text-xs px-2 py-1.5 bg-transparent border border-transparent hover:border-slate-200 focus:border-blue-400 focus:bg-white rounded transition-colors outline-none"
+                />
+            ),
+        },
+        {
+            key: 'time',
+            label: 'Thời gian',
+            align: 'right',
+            className: 'text-xs text-slate-400',
+            render: (r) => r.attendance_time ? formatDateTime(r.attendance_time) : "—",
+        },
+    ];
 
     return (
         <div className="space-y-5">
@@ -239,7 +394,15 @@ export function ExamDetailView({ schedule, onBack }: Props) {
                 <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2 flex-wrap">
                     <i className="ti ti-list-check text-emerald-600" />
                     <h4 className="text-sm font-semibold text-slate-900">Danh sách thí sinh</h4>
-                    <div className="ml-auto flex items-center gap-2">
+                    <div className="ml-4 mr-auto w-64 max-w-full">
+                        <SearchBar
+                            placeholder="Tìm kiếm mã, tên SV..."
+                            value={searchQuery}
+                            onChange={(val) => setSearchQuery(val)}
+                            className="!h-8 text-xs"
+                        />
+                    </div>
+                    <div className="flex items-center gap-2">
                         <Button 
                             variant="secondary" 
                             size="sm" 
@@ -259,74 +422,14 @@ export function ExamDetailView({ schedule, onBack }: Props) {
                     </div>
                 </div>
 
-                <div className="border-b border-slate-100 max-h-[400px] overflow-y-auto">
-                    <table className="w-full text-sm">
-                        <thead className="bg-slate-50/80 sticky top-0 z-10">
-                            <tr className="text-left text-slate-500 text-xs">
-                                <th className="px-4 py-2.5 font-medium w-10">#</th>
-                                <th className="px-4 py-2.5 font-medium">Mã SV</th>
-                                <th 
-                                    className="px-4 py-2.5 font-medium cursor-pointer hover:bg-slate-100 transition-colors"
-                                    onClick={() => setNameSortDir(prev => prev === 'asc' ? 'desc' : 'asc')}
-                                >
-                                    <div className="flex items-center gap-1">
-                                        Họ tên
-                                        <i className={`ti ti-sort-${nameSortDir === 'asc' ? 'ascending' : 'descending'} text-slate-400`} />
-                                    </div>
-                                </th>
-                                <th className="px-4 py-2.5 font-medium">Lớp</th>
-                                <th className="px-4 py-2.5 font-medium text-center">Trạng thái</th>
-                                <th className="px-4 py-2.5 font-medium text-right">Thời gian</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {loadingRecords ? (
-                                <tr>
-                                    <td colSpan={6} className="px-4 py-8 text-center text-slate-400 text-sm">
-                                        <span className="w-5 h-5 rounded-full border-2 border-slate-200 border-t-blue-500 animate-spin inline-block mb-2" />
-                                        <br />Đang tải danh sách...
-                                    </td>
-                                </tr>
-                            ) : sortedRecords.length === 0 ? (
-                                <tr>
-                                    <td colSpan={6} className="px-4 py-8 text-center text-slate-400 text-sm">
-                                        Chưa có thí sinh nào trong ca thi này
-                                    </td>
-                                </tr>
-                            ) : (
-                                paginatedRecords.map((r, idx) => (
-                                    <tr key={r.id} className="border-t border-slate-50 hover:bg-slate-50/50 transition-colors">
-                                        <td className="px-4 py-2.5 text-slate-400 text-xs">{(page - 1) * limit + idx + 1}</td>
-                                        <td className="px-4 py-2.5 font-medium text-slate-900">
-                                            {r.student?.student_code}
-                                        </td>
-                                        <td className="px-4 py-2.5 text-slate-700">
-                                            {r.student?.last_name} {r.student?.first_name}
-                                        </td>
-                                        <td className="px-4 py-2.5 text-slate-500 text-xs">
-                                            {r.student?.class?.name || r.student?.class?.class_code || "—"}
-                                        </td>
-                                        <td className="px-4 py-2.5 text-center">
-                                            {r.attendance_time ? (
-                                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                                    <i className="ti ti-check text-xs" />
-                                                    Đã điểm danh
-                                                </span>
-                                            ) : (
-                                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                                                    <i className="ti ti-clock text-xs" />
-                                                    Chờ điểm danh
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-2.5 text-right text-xs text-slate-400">
-                                            {r.attendance_time ? formatDateTime(r.attendance_time) : "—"}
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
+                <div className="border-b border-slate-100 max-h-[400px] overflow-y-auto relative">
+                    <DataTable
+                        columns={columns}
+                        data={paginatedRecords}
+                        loading={loadingRecords}
+                        rowKey={(r) => r.id}
+                        emptyText={searchQuery ? "Không tìm thấy kết quả nào." : "Chưa có thí sinh nào trong ca thi này"}
+                    />
                 </div>
 
                 {/* Phân trang */}
@@ -346,6 +449,24 @@ export function ExamDetailView({ schedule, onBack }: Props) {
                 schedule={schedule}
                 onSuccess={fetchRecords}
             />
+
+            {/* Image Modal */}
+            <Modal
+                open={!!selectedImage}
+                onClose={() => setSelectedImage(null)}
+                title="Ảnh gốc sinh viên"
+                size="sm"
+            >
+                <div className="flex justify-center p-4">
+                    {selectedImage && (
+                        <img 
+                            src={selectedImage} 
+                            alt="Student photo" 
+                            className="max-w-full max-h-[60vh] rounded-lg shadow-sm object-contain"
+                        />
+                    )}
+                </div>
+            </Modal>
         </div>
     );
 }

@@ -123,6 +123,7 @@ export interface AttendanceRecord {
   rekognition_result: RekognitionResult;
   confidence: number;
   attendance_time: Date;
+  note?: string;
   exam_schedule_id: string;
 }
 

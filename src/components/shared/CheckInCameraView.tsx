@@ -98,12 +98,14 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
         try {
             // Tải model AI
             const MODEL_URL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model";
-            await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+            // Sử dụng SSD Mobilenet V1 cho độ chính xác cao khi quét nhiều mặt ở khoảng cách xa
+            await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
             setIsModelLoaded(true);
 
             // Bật camera
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: currentFacingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
+                // Giảm resolution xuống 720p (tối ưu cho điện thoại)
+                video: { facingMode: currentFacingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
             });
             streamRef.current = stream;
 
@@ -121,7 +123,7 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
 
     const stopCamera = () => {
         if (intervalRef.current) {
-            clearInterval(intervalRef.current);
+            clearTimeout(intervalRef.current);
             intervalRef.current = null;
         }
         if (streamRef.current) {
@@ -136,43 +138,56 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
         if (!videoRef.current || !canvasRef.current || !isModelLoaded) return;
 
         if (intervalRef.current) {
-            clearInterval(intervalRef.current);
+            clearTimeout(intervalRef.current);
         }
 
         const video = videoRef.current;
         const canvas = canvasRef.current;
 
-        intervalRef.current = setInterval(async () => {
+        const detectLoop = async () => {
             if (video.paused || video.ended) return;
-            if (video.videoWidth === 0 || video.videoHeight === 0) return;
 
-            const displaySize = { width: video.videoWidth, height: video.videoHeight };
-            faceapi.matchDimensions(canvas, displaySize);
+            if (video.videoWidth > 0 && video.videoHeight > 0) {
+                const displaySize = { width: video.videoWidth, height: video.videoHeight };
+                faceapi.matchDimensions(canvas, displaySize);
 
-            const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
-            setFaceCount(detections.length);
+                try {
+                    const detections = await faceapi.detectAllFaces(video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }));
+                    setFaceCount(detections.length);
 
-            const resizedDetections = faceapi.resizeResults(detections, displaySize);
-            const ctx = canvas.getContext("2d");
+                    const resizedDetections = faceapi.resizeResults(detections, displaySize);
+                    const ctx = canvas.getContext("2d");
 
-            if (ctx) {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                // Vẽ custom detection boxes với màu xanh lá
-                resizedDetections.forEach((det) => {
-                    const { x, y, width, height } = det.box;
-                    ctx.strokeStyle = "#22c55e";
-                    ctx.lineWidth = 2.5;
-                    ctx.strokeRect(x, y, width, height);
+                    if (ctx) {
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        // Vẽ custom detection boxes với màu xanh lá
+                        resizedDetections.forEach((det) => {
+                            const { x, y, width, height } = det.box;
+                            ctx.strokeStyle = "#22c55e";
+                            ctx.lineWidth = 2.5;
+                            ctx.strokeRect(x, y, width, height);
 
-                    // Label
-                    ctx.fillStyle = "rgba(34, 197, 94, 0.85)";
-                    ctx.fillRect(x, y - 20, 80, 20);
-                    ctx.fillStyle = "#fff";
-                    ctx.font = "bold 11px Inter, sans-serif";
-                    ctx.fillText(`Face ${(det.score * 100).toFixed(0)}%`, x + 4, y - 6);
-                });
+                            // Label
+                            ctx.fillStyle = "rgba(34, 197, 94, 0.85)";
+                            ctx.fillRect(x, y - 20, 80, 20);
+                            ctx.fillStyle = "#fff";
+                            ctx.font = "bold 11px Inter, sans-serif";
+                            ctx.fillText(`Face ${(det.score * 100).toFixed(0)}%`, x + 4, y - 6);
+                        });
+                    }
+                } catch (e) {
+                    console.error("Detect error:", e);
+                }
             }
-        }, 150);
+
+            // Chạy frame tiếp theo một cách tuần tự sau khi frame trước kết thúc
+            // Sử dụng setTimeout 100ms kết hợp requestAnimationFrame để không làm đơ UI trên điện thoại
+            intervalRef.current = setTimeout(() => {
+                requestAnimationFrame(detectLoop);
+            }, 100);
+        };
+
+        detectLoop();
     };
 
     
@@ -187,8 +202,8 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
         video.pause(); // Freeze the camera frame
 
         try {
-            // Phát hiện tất cả faces
-            const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
+            // Phát hiện tất cả faces với SSD Mobilenet V1
+            const detections = await faceapi.detectAllFaces(video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }));
 
             if (detections.length === 0) {
                 toast.error("Không phát hiện được khuôn mặt nào trong khung hình");

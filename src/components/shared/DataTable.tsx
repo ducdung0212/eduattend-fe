@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 
 export interface Column<T> {
   key: string;
-  label: string;
+  label: ReactNode;
   render?: (row: T, index: number) => ReactNode;
   align?: 'left' | 'right' | 'center';
   className?: string;
