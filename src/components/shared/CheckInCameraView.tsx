@@ -6,7 +6,7 @@ import { formatTime, todayString } from "@/lib/utils";
 import { ExamSchedule } from "@/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
-import * as faceapi from "face-api.js";
+import { FaceDetector, FilesetResolver } from "@mediapipe/tasks-vision";
 import { Modal } from "@/components/ui/Modal";
 import { SearchBar } from "./SearchBar";
 
@@ -39,6 +39,9 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
+    const detectorRef = useRef<FaceDetector | null>(null);
+    const animationFrameRef = useRef<number | null>(null);
+    const lastVideoTimeRef = useRef<number>(-1);
 
     const [isModelLoaded, setIsModelLoaded] = useState(false);
     const [isCameraOn, setIsCameraOn] = useState(false);
@@ -96,10 +99,34 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
     const startCamera = async (currentFacingMode: "environment" | "user" = facingMode) => {
         setIsLoadingAI(true);
         try {
-            // Tải model AI
-            const MODEL_URL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model";
-            // Sử dụng SSD Mobilenet V1 cho độ chính xác cao khi quét nhiều mặt ở khoảng cách xa
-            await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
+            // Tải model AI MediaPipe
+            const vision = await FilesetResolver.forVisionTasks("/wasm");
+            let detector: FaceDetector;
+            
+            try {
+                // Thử khởi tạo với GPU
+                detector = await FaceDetector.createFromOptions(vision, {
+                    baseOptions: {
+                        modelAssetPath: "/models/blaze_face_short_range.tflite",
+                        delegate: "GPU"
+                    },
+                    runningMode: "VIDEO",
+                    minDetectionConfidence: 0.5
+                });
+            } catch (gpuError) {
+                console.warn("GPU delegate failed, falling back to CPU", gpuError);
+                // Fallback CPU
+                detector = await FaceDetector.createFromOptions(vision, {
+                    baseOptions: {
+                        modelAssetPath: "/models/blaze_face_short_range.tflite",
+                        delegate: "CPU"
+                    },
+                    runningMode: "VIDEO",
+                    minDetectionConfidence: 0.5
+                });
+            }
+            
+            detectorRef.current = detector;
             setIsModelLoaded(true);
 
             // Bật camera
@@ -126,53 +153,69 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
             clearTimeout(intervalRef.current);
             intervalRef.current = null;
         }
+        if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current);
+            animationFrameRef.current = null;
+        }
         if (streamRef.current) {
             streamRef.current.getTracks().forEach((track) => track.stop());
             streamRef.current = null;
         }
+        if (detectorRef.current) {
+            detectorRef.current.close();
+            detectorRef.current = null;
+        }
         setIsCameraOn(false);
+        setIsModelLoaded(false);
+        setFaceCount(0);
     };
 
     // Face detection loop
     const handleVideoPlay = () => {
-        if (!videoRef.current || !canvasRef.current || !isModelLoaded) return;
+        if (!videoRef.current || !canvasRef.current || !detectorRef.current) return;
 
-        if (intervalRef.current) {
-            clearTimeout(intervalRef.current);
+        if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current);
         }
 
         const video = videoRef.current;
         const canvas = canvasRef.current;
+        const ctx = canvas.getContext("2d");
 
-        const detectLoop = async () => {
-            if (video.paused || video.ended) return;
+        const detectLoop = () => {
+            if (video.paused || video.ended || !detectorRef.current) return;
 
-            if (video.videoWidth > 0 && video.videoHeight > 0) {
-                const displaySize = { width: video.videoWidth, height: video.videoHeight };
-                faceapi.matchDimensions(canvas, displaySize);
-
+            if (video.currentTime !== lastVideoTimeRef.current && video.videoWidth > 0 && video.videoHeight > 0) {
+                lastVideoTimeRef.current = video.currentTime;
+                
+                // Map dimensions
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                
                 try {
-                    const detections = await faceapi.detectAllFaces(video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }));
+                    const startTimeMs = performance.now();
+                    const result = detectorRef.current.detectForVideo(video, startTimeMs);
+                    const detections = result.detections;
                     setFaceCount(detections.length);
-
-                    const resizedDetections = faceapi.resizeResults(detections, displaySize);
-                    const ctx = canvas.getContext("2d");
 
                     if (ctx) {
                         ctx.clearRect(0, 0, canvas.width, canvas.height);
-                        // Vẽ custom detection boxes với màu xanh lá
-                        resizedDetections.forEach((det) => {
-                            const { x, y, width, height } = det.box;
+                        
+                        detections.forEach((det) => {
+                            if (!det.boundingBox) return;
+                            const { originX: x, originY: y, width: w, height: h } = det.boundingBox;
+
                             ctx.strokeStyle = "#22c55e";
                             ctx.lineWidth = 2.5;
-                            ctx.strokeRect(x, y, width, height);
+                            ctx.strokeRect(x, y, w, h);
 
                             // Label
                             ctx.fillStyle = "rgba(34, 197, 94, 0.85)";
                             ctx.fillRect(x, y - 20, 80, 20);
                             ctx.fillStyle = "#fff";
                             ctx.font = "bold 11px Inter, sans-serif";
-                            ctx.fillText(`Face ${(det.score * 100).toFixed(0)}%`, x + 4, y - 6);
+                            const score = det.categories[0]?.score ?? 0;
+                            ctx.fillText(`Face ${(score * 100).toFixed(0)}%`, x + 4, y - 6);
                         });
                     }
                 } catch (e) {
@@ -180,21 +223,17 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
                 }
             }
 
-            // Chạy frame tiếp theo một cách tuần tự sau khi frame trước kết thúc
-            // Sử dụng setTimeout 100ms kết hợp requestAnimationFrame để không làm đơ UI trên điện thoại
-            intervalRef.current = setTimeout(() => {
-                requestAnimationFrame(detectLoop);
-            }, 100);
+            animationFrameRef.current = requestAnimationFrame(detectLoop);
         };
 
-        detectLoop();
+        animationFrameRef.current = requestAnimationFrame(detectLoop);
     };
 
     
 
     // Chụp ảnh & Điểm danh (hỗ trợ multi-face bằng cách crop)
     const handleCheckIn = useCallback(async () => {
-        if (!videoRef.current || !canvasRef.current) return;
+        if (!videoRef.current || !canvasRef.current || !detectorRef.current) return;
         setIsCheckingIn(true);
         setResults([]); // Xoá kết quả cũ trước khi điểm danh lượt mới
 
@@ -202,12 +241,14 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
         video.pause(); // Freeze the camera frame
 
         try {
-            // Phát hiện tất cả faces với SSD Mobilenet V1
-            const detections = await faceapi.detectAllFaces(video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }));
+            // Sử dụng MediaPipe để detect trên frame hiện tại
+            const result = detectorRef.current.detectForVideo(video, performance.now());
+            const detections = result.detections;
 
             if (detections.length === 0) {
                 toast.error("Không phát hiện được khuôn mặt nào trong khung hình");
                 setIsCheckingIn(false);
+                if (videoRef.current) videoRef.current.play().catch(e => console.error("Cannot resume video", e));
                 return;
             }
 
@@ -228,7 +269,8 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
             } else {
                 // Crop từng face
                 for (const det of detections) {
-                    const { x, y, width, height } = det.box;
+                    if (!det.boundingBox) continue;
+                    const { originX: x, originY: y, width, height } = det.boundingBox;
                     // Mở rộng vùng crop để bao gồm cả khuôn mặt
                     const padding = Math.max(width, height) * 0.4;
                     const cx = Math.max(0, x - padding);
