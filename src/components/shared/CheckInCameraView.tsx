@@ -41,7 +41,9 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
     const detectorRef = useRef<FaceDetector | null>(null);
     const animationFrameRef = useRef<number | null>(null);
+    const videoFrameRef = useRef<number | null>(null);
     const lastVideoTimeRef = useRef<number>(-1);
+    const detectCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
     const [isModelLoaded, setIsModelLoaded] = useState(false);
     const [isCameraOn, setIsCameraOn] = useState(false);
@@ -107,11 +109,11 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
                 // Thử khởi tạo với GPU
                 detector = await FaceDetector.createFromOptions(vision, {
                     baseOptions: {
-                        modelAssetPath: "/models/blaze_face_short_range.tflite",
+                        modelAssetPath: "/models/blaze_face_full_range.tflite",
                         delegate: "GPU"
                     },
                     runningMode: "VIDEO",
-                    minDetectionConfidence: 0.5
+                    minDetectionConfidence: 0.4
                 });
             } catch (gpuError) {
                 console.warn("GPU delegate failed, falling back to CPU", gpuError);
@@ -153,6 +155,11 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
             clearTimeout(intervalRef.current);
             intervalRef.current = null;
         }
+        if (videoFrameRef.current && videoRef.current && 'cancelVideoFrameCallback' in videoRef.current) {
+            // @ts-ignore
+            videoRef.current.cancelVideoFrameCallback(videoFrameRef.current);
+            videoFrameRef.current = null;
+        }
         if (animationFrameRef.current) {
             cancelAnimationFrame(animationFrameRef.current);
             animationFrameRef.current = null;
@@ -174,68 +181,96 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
     const handleVideoPlay = () => {
         if (!videoRef.current || !canvasRef.current || !detectorRef.current) return;
 
+        if (videoFrameRef.current && 'cancelVideoFrameCallback' in videoRef.current) {
+            // @ts-ignore
+            videoRef.current.cancelVideoFrameCallback(videoFrameRef.current);
+            videoFrameRef.current = null;
+        }
         if (animationFrameRef.current) {
             cancelAnimationFrame(animationFrameRef.current);
+            animationFrameRef.current = null;
         }
 
         const video = videoRef.current;
         const canvas = canvasRef.current;
         const ctx = canvas.getContext("2d");
 
+        if (!detectCanvasRef.current) {
+            detectCanvasRef.current = document.createElement("canvas");
+            detectCanvasRef.current.width = 320;
+            detectCanvasRef.current.height = 240;
+        }
+
         let lastDetectionTime = 0;
 
-        const detectLoop = () => {
+        const detectLoop = (now: number = performance.now()) => {
             if (video.paused || video.ended || !detectorRef.current) return;
 
-            const now = performance.now();
+            if (now - lastDetectionTime >= 100) {
+                lastDetectionTime = now;
+                lastVideoTimeRef.current = video.currentTime;
 
-            // Chỉ chạy detect tối đa 10 lần mỗi giây (100ms) để không làm tụt FPS của camera stream
-            if (video.currentTime !== lastVideoTimeRef.current && video.videoWidth > 0 && video.videoHeight > 0) {
-                if (now - lastDetectionTime >= 100) {
-                    lastDetectionTime = now;
-                    lastVideoTimeRef.current = video.currentTime;
+                // Map dimensions
+                if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                }
 
-                    // Map dimensions
-                    if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-                        canvas.width = video.videoWidth;
-                        canvas.height = video.videoHeight;
+                try {
+                    const dctx = detectCanvasRef.current!.getContext("2d")!;
+                    dctx.drawImage(video, 0, 0, 320, 240);
+
+                    const result = detectorRef.current.detectForVideo(detectCanvasRef.current!, now);
+                    const detections = result.detections;
+                    setFaceCount(detections.length);
+
+                    if (ctx) {
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                        const scaleX = video.videoWidth / 320;
+                        const scaleY = video.videoHeight / 240;
+
+                        detections.forEach((det) => {
+                            if (!det.boundingBox) return;
+                            const { originX, originY, width, height } = det.boundingBox;
+
+                            const x = originX * scaleX;
+                            const y = originY * scaleY;
+                            const w = width * scaleX;
+                            const h = height * scaleY;
+
+                            ctx.strokeStyle = "#22c55e";
+                            ctx.lineWidth = 2.5;
+                            ctx.strokeRect(x, y, w, h);
+
+                            // Label
+                            ctx.fillStyle = "rgba(34, 197, 94, 0.85)";
+                            ctx.fillRect(x, y - 20, 80, 20);
+                            ctx.fillStyle = "#fff";
+                            ctx.font = "bold 11px Inter, sans-serif";
+                            const score = det.categories[0]?.score ?? 0;
+                            ctx.fillText(`Face ${(score * 100).toFixed(0)}%`, x + 4, y - 6);
+                        });
                     }
-
-                    try {
-                        const result = detectorRef.current.detectForVideo(video, now);
-                        const detections = result.detections;
-                        setFaceCount(detections.length);
-
-                        if (ctx) {
-                            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-                            detections.forEach((det) => {
-                                if (!det.boundingBox) return;
-                                const { originX: x, originY: y, width: w, height: h } = det.boundingBox;
-
-                                ctx.strokeStyle = "#22c55e";
-                                ctx.lineWidth = 2.5;
-                                ctx.strokeRect(x, y, w, h);
-
-                                // Label
-                                ctx.fillStyle = "rgba(34, 197, 94, 0.85)";
-                                ctx.fillRect(x, y - 20, 80, 20);
-                                ctx.fillStyle = "#fff";
-                                ctx.font = "bold 11px Inter, sans-serif";
-                                const score = det.categories[0]?.score ?? 0;
-                                ctx.fillText(`Face ${(score * 100).toFixed(0)}%`, x + 4, y - 6);
-                            });
-                        }
-                    } catch (e) {
-                        console.error("Detect error:", e);
-                    }
+                } catch (e) {
+                    console.error("Detect error:", e);
                 }
             }
 
-            animationFrameRef.current = requestAnimationFrame(detectLoop);
+            if ('requestVideoFrameCallback' in video) {
+                // @ts-ignore
+                videoFrameRef.current = video.requestVideoFrameCallback(detectLoop);
+            } else {
+                animationFrameRef.current = requestAnimationFrame(() => detectLoop(performance.now()));
+            }
         };
 
-        animationFrameRef.current = requestAnimationFrame(detectLoop);
+        if ('requestVideoFrameCallback' in video) {
+            // @ts-ignore
+            videoFrameRef.current = video.requestVideoFrameCallback(detectLoop);
+        } else {
+            animationFrameRef.current = requestAnimationFrame(() => detectLoop(performance.now()));
+        }
     };
 
     // Chụp ảnh & Điểm danh (hỗ trợ multi-face bằng cách crop)
@@ -260,8 +295,8 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
                 }
 
                 // Nếu chỉ có 1 face → gửi toàn bộ ảnh
-                // Nếu nhiều face → crop từng face ra và gửi song song
-                const requests: Promise<void>[] = [];
+                // Nếu nhiều face → crop từng face ra và gửi qua concurrency
+                const tasks: (() => Promise<void>)[] = [];
 
                 if (detections.length === 1) {
                     // Gửi toàn bộ frame
@@ -271,7 +306,7 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
                     const ctx = captureCanvas.getContext("2d");
                     if (ctx) {
                         ctx.drawImage(video, 0, 0);
-                        requests.push(sendCheckIn(captureCanvas));
+                        tasks.push(() => sendCheckIn(captureCanvas));
                     }
                 } else {
                     // Crop từng face
@@ -291,12 +326,26 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
                         const ctx = cropCanvas.getContext("2d");
                         if (ctx) {
                             ctx.drawImage(video, cx, cy, cw, ch, 0, 0, cw, ch);
-                            requests.push(sendCheckIn(cropCanvas));
+                            tasks.push(() => sendCheckIn(cropCanvas));
                         }
                     }
                 }
 
-                await Promise.allSettled(requests);
+                async function runWithConcurrency<T>(taskList: (() => Promise<T>)[], limit: number) {
+                    const results: Promise<T>[] = [];
+                    const executing: Promise<void>[] = [];
+                    for (const task of taskList) {
+                        const p = task().then((r) => { results.push(Promise.resolve(r)); });
+                        executing.push(p);
+                        if (executing.length >= limit) {
+                            await Promise.race(executing);
+                            executing.splice(executing.findIndex(e => e === p), 1);
+                        }
+                    }
+                    await Promise.allSettled(executing);
+                }
+
+                await runWithConcurrency(tasks, 3);
             } catch (err) {
                 console.error("Lỗi khi điểm danh:", err);
                 toast.error("Có lỗi xảy ra khi xử lý điểm danh");

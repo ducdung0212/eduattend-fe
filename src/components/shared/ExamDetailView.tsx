@@ -169,7 +169,8 @@ export function ExamDetailView({ schedule, onBack }: Props) {
             "Họ tên": `${r.student?.last_name || ""} ${r.student?.first_name || ""}`.trim(),
             "Lớp": r.student?.class?.name || r.student?.class?.class_code || "",
             "Trạng thái": r.attendance_time ? "Đã điểm danh" : "Chờ điểm danh",
-            "Thời gian điểm danh": r.attendance_time ? formatDateTime(r.attendance_time) : ""
+            "Thời gian điểm danh": r.attendance_time ? formatDateTime(r.attendance_time) : "",
+            "Ghi chú": r.note || "",
         }));
 
         const ws = XLSX.utils.json_to_sheet(data);
