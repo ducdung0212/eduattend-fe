@@ -39,7 +39,7 @@ export function Header({ user }: HeaderProps) {
   const title = resolveTitle(pathname);
 
   return (
-    <header className="flex items-center justify-between h-16 px-6 bg-white border-b border-slate-200/70 shrink-0">
+    <header className="flex items-center justify-between h-16 pl-12 pr-6 bg-white border-b border-slate-200/70 shrink-0">
       <h1 className="text-base font-medium text-slate-900">{title}</h1>
 
       <div className="flex items-center gap-3">
