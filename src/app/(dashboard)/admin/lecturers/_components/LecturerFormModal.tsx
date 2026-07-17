@@ -7,6 +7,7 @@ import api from "@/lib/api";
 import { splitFullName } from "@/lib/utils";
 import { Faculty, Lecturer } from "@/types";
 import React, { useEffect, useState, useRef, useCallback } from "react";
+import { IconCamera, IconTrash } from "@tabler/icons-react";
 import toast from "react-hot-toast";
 
 interface LecturerFormModalProps {
@@ -29,6 +30,10 @@ export function LecturerFormModal({ open, lecturer, onClose, onSuccess }: Lectur
     });
 
     const [fullName, setFullName] = useState("");
+
+    const [photoFile, setPhotoFile] = useState<File | null>(null);
+    const [photoPreview, setPhotoPreview] = useState<string>("");
+    const photoInputRef = useRef<HTMLInputElement>(null);
     
     const [submitting, setSubmitting] = useState(false);
     const [faculties, setFaculties] = useState<Faculty[]>([]);
@@ -66,6 +71,8 @@ export function LecturerFormModal({ open, lecturer, onClose, onSuccess }: Lectur
                     user_id: lecturer.user?.id ?? "", 
                 });
                 setSearchTerm(lecturer.user?.email || "");
+                setPhotoPreview((lecturer as any).photos?.[0]?.image_url || "");
+                setPhotoFile(null);
                 setFullName(`${lecturer.last_name} ${lecturer.first_name}`.trim());
             } else {
                 setFormData({
@@ -80,6 +87,8 @@ export function LecturerFormModal({ open, lecturer, onClose, onSuccess }: Lectur
                 });
                 setSearchTerm("");
                 setFullName("");
+                setPhotoPreview("");
+                setPhotoFile(null);
             }
             setSearchedUsers([]);
             setShowDropdown(false);
@@ -135,6 +144,47 @@ export function LecturerFormModal({ open, lecturer, onClose, onSuccess }: Lectur
         setShowDropdown(false);
     };
 
+    const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            setPhotoFile(file);
+            setPhotoPreview(URL.createObjectURL(file));
+        }
+    };
+
+    const handleRemovePhoto = () => {
+        setPhotoFile(null);
+        setPhotoPreview("");
+        if (photoInputRef.current) photoInputRef.current.value = "";
+    };
+
+    const uploadPhoto = async (lecturerCode: string) => {
+        if (!photoFile) return;
+        const extension = photoFile.name.substring(photoFile.name.lastIndexOf('.') + 1).toLowerCase();
+        const validExtension = ['jpg', 'jpeg', 'png'].includes(extension) ? extension : 'jpg'; // Fallback
+        const generatePayload = [{
+            fileName: `${lecturerCode}.${validExtension}`,
+            fileType: photoFile.type
+        }];
+        const generateRes = await api.post("/lecturer-photos/generate-upload-urls", {
+            files: generatePayload,
+        });
+        const config = generateRes.data?.data?.[0] || generateRes.data?.[0];
+        if (config && config.success && config.uploadUrl) {
+            await fetch(config.uploadUrl, {
+                method: "PUT",
+                body: photoFile,
+                headers: { "Content-Type": photoFile.type },
+            });
+            await api.post("/lecturer-photos/confirm-uploads", {
+                uploads: [{
+                    fileName: config.fileName,
+                    lecturer_code: lecturerCode,
+                }]
+            });
+        }
+    };
+
     const handleSubmit = async (e: React.SyntheticEvent) => {
         e.preventDefault();
         setSubmitting(true);
@@ -149,6 +199,7 @@ export function LecturerFormModal({ open, lecturer, onClose, onSuccess }: Lectur
                     user_id: formData.user_id === "" ? null : formData.user_id, 
                 };
                 await api.patch(`/lecturers/${lecturer.lecturer_code}`, payload);
+                await uploadPhoto(lecturer.lecturer_code);
                 toast.success("Cập nhật giảng viên thành công");
             } else {
                  const payload = {
@@ -156,7 +207,9 @@ export function LecturerFormModal({ open, lecturer, onClose, onSuccess }: Lectur
                     phone: formData.phone===""?undefined:formData.phone,
                     user_id: formData.user_id === "" ? null : formData.user_id, 
                 };
-                await api.post("/lecturers", payload);
+                const res = await api.post("/lecturers", payload);
+                const newLecturerCode = res.data?.data?.lecturer_code || formData.lecturer_code;
+                await uploadPhoto(newLecturerCode);
                 toast.success("Thêm giảng viên thành công");
             }
             onSuccess();
@@ -186,6 +239,54 @@ export function LecturerFormModal({ open, lecturer, onClose, onSuccess }: Lectur
             }
         >
             <form id="lecturer-form" onSubmit={handleSubmit} className="space-y-4">
+                
+                {/* Khu vực upload ảnh */}
+                <div className="flex flex-col items-center justify-center gap-3 mb-4">
+                    <input 
+                        type="file" 
+                        accept="image/jpeg, image/png" 
+                        className="hidden" 
+                        ref={photoInputRef} 
+                        onChange={handlePhotoChange} 
+                    />
+                    <div className="relative group">
+                        <div 
+                            className={`w-24 h-24 rounded-full border-2 border-dashed flex flex-col items-center justify-center overflow-hidden bg-slate-50 cursor-pointer transition-colors ${photoPreview ? 'border-transparent' : 'border-slate-300 hover:border-slate-400'}`}
+                            onClick={() => !photoPreview && photoInputRef.current?.click()}
+                        >
+                            {photoPreview ? (
+                                <img src={photoPreview} alt="Lecturer" className="w-full h-full object-cover" />
+                            ) : (
+                                <>
+                                    <IconCamera className="w-8 h-8 text-slate-400 mb-1" />
+                                    <span className="text-[10px] text-slate-500 font-medium">Chọn ảnh</span>
+                                </>
+                            )}
+                        </div>
+                        
+                        {photoPreview && (
+                            <div className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                <button 
+                                    type="button"
+                                    onClick={() => photoInputRef.current?.click()}
+                                    className="p-1.5 bg-white text-slate-700 rounded-full hover:bg-slate-100 transition-colors"
+                                    title="Đổi ảnh"
+                                >
+                                    <IconCamera className="w-4 h-4" />
+                                </button>
+                                <button 
+                                    type="button"
+                                    onClick={handleRemovePhoto}
+                                    className="p-1.5 bg-white text-rose-600 rounded-full hover:bg-rose-50 transition-colors"
+                                    title="Xóa ảnh"
+                                >
+                                    <IconTrash className="w-4 h-4" />
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
                 <Input
                     label="Mã giảng viên"
                     required

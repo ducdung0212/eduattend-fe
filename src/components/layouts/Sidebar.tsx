@@ -43,6 +43,14 @@ export function Sidebar({ menuItems, user }: SidebarProps) {
   }
 
   function isActive(href: string) {
+    // Nếu là trang Dashboard (chỉ có 1 cấp như /admin, /lecturer, /student)
+    // thì phải khớp chính xác tuyệt đối (exact match)
+    const isRootLevel = href === `/${user.role}`;
+    
+    if (isRootLevel) {
+      return pathname === href;
+    }
+    
     return pathname === href || pathname.startsWith(href + '/');
   }
 
@@ -50,13 +58,16 @@ export function Sidebar({ menuItems, user }: SidebarProps) {
     <aside
       className={cn(
         'flex flex-col shrink-0 h-screen bg-white border-r border-slate-200/70 relative transition-all duration-300 ease-in-out',
-        isCollapsed ? 'w-20' : 'w-60' // Đổi chiều rộng dựa trên state
+        isCollapsed ? 'w-0 border-r-0' : 'w-60' // Đổi chiều rộng dựa trên state
       )}
     >
       {/* Nút Toggle ẩn/hiện */}
       <button
         onClick={() => setIsCollapsed(!isCollapsed)}
-        className="absolute -right-3 top-6 z-50 flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 hover:text-slate-900 hover:border-slate-300 shadow-sm transition-colors"
+        className={cn(
+          "absolute top-6 z-50 flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 hover:text-slate-900 hover:border-slate-300 shadow-sm transition-all",
+          isCollapsed ? "-right-8" : "-right-3"
+        )}
         aria-label="Thu gọn sidebar"
       >
         {isCollapsed ? (
@@ -69,8 +80,8 @@ export function Sidebar({ menuItems, user }: SidebarProps) {
       {/* Logo */}
       <div 
         className={cn(
-          'flex items-center h-16 border-b border-slate-100 transition-all',
-          isCollapsed ? 'justify-center px-0' : 'gap-2.5 px-5'
+          'flex items-center h-16 border-b border-slate-100 transition-all overflow-hidden whitespace-nowrap',
+          isCollapsed ? 'px-0 opacity-0' : 'gap-2.5 px-5 opacity-100'
         )}
       >
         <div className="w-7 h-7 rounded-lg bg-slate-900 flex items-center justify-center shrink-0">
@@ -84,7 +95,7 @@ export function Sidebar({ menuItems, user }: SidebarProps) {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto overflow-x-hidden py-4 px-3 space-y-0.5 custom-scrollbar">
+      <nav className={cn("flex-1 overflow-y-auto overflow-x-hidden py-4 space-y-0.5 custom-scrollbar transition-all", isCollapsed ? "px-0 opacity-0 pointer-events-none" : "px-3 opacity-100")}>
         {menuItems.map((item) =>
           item.children ? (
             <div key={item.href}>
@@ -141,7 +152,7 @@ export function Sidebar({ menuItems, user }: SidebarProps) {
       </nav>
 
       {/* User card */}
-      <div className="px-3 pb-4 border-t border-slate-100 pt-3">
+      <div className={cn("pb-4 border-t border-slate-100 pt-3 transition-all overflow-hidden", isCollapsed ? "px-0 opacity-0 pointer-events-none" : "px-3 opacity-100")}>
         <div 
           className={cn(
             'flex rounded-lg transition-all',

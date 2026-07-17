@@ -12,6 +12,7 @@ interface Props {
     onDelete?: (schedule: ExamSchedule) => void;
     onManageStudents?: (schedule: ExamSchedule) => void;
     onManageSupervisors?: (schedule: ExamSchedule) => void;
+    onViewDetails?: (schedule: ExamSchedule) => void;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -58,6 +59,7 @@ function ContextMenu({
     onDelete,
     onManageStudents,
     onManageSupervisors,
+    onViewDetails,
 }: {
     schedule: ExamSchedule;
     anchorPos: { x: number; y: number };
@@ -66,6 +68,7 @@ function ContextMenu({
     onDelete?: (s: ExamSchedule) => void;
     onManageStudents?: (s: ExamSchedule) => void;
     onManageSupervisors?: (s: ExamSchedule) => void;
+    onViewDetails?: (s: ExamSchedule) => void;
 }) {
     const menuRef = useRef<HTMLDivElement>(null);
     const [pos, setPos] = useState(anchorPos);
@@ -98,6 +101,12 @@ function ContextMenu({
     }, [onClose]);
 
     const menuItems = [
+        {
+            label: "Xem chi tiết",
+            icon: <i className="ti ti-file-description text-sm" />,
+            onClick: () => { onViewDetails?.(schedule); onClose(); },
+            className: "text-slate-700 hover:bg-slate-50",
+        },
         {
             label: "Sửa ca thi",
             icon: <i className="ti ti-edit text-sm" />,
@@ -236,6 +245,7 @@ export function ExamScheduleGridView({
     onDelete,
     onManageStudents,
     onManageSupervisors,
+    onViewDetails,
 }: Props) {
     const [contextMenu, setContextMenu] = useState<{
         schedule: ExamSchedule;
@@ -407,6 +417,7 @@ export function ExamScheduleGridView({
                     onDelete={onDelete}
                     onManageStudents={onManageStudents}
                     onManageSupervisors={onManageSupervisors}
+                    onViewDetails={onViewDetails}
                 />
             )}
         </>

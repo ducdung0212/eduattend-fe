@@ -72,6 +72,7 @@ export interface Lecturer {
   phone: string;
   faculty: Faculty;
   user: User;
+  photos?: { image_url: string }[];
 }
 
 export interface Room {
@@ -124,6 +125,7 @@ export interface AttendanceRecord {
   confidence: number;
   attendance_time: Date;
   note?: string;
+  status?: AttendanceStatus;
   exam_schedule_id: string;
 }
 

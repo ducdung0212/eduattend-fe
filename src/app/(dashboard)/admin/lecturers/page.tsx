@@ -13,6 +13,7 @@ import { LecturerFormModal } from "./_components/LecturerFormModal";
 import { LecturerImportModal } from "./_components/LecturerImportModal"; // Import component mới
 import { Modal } from "@/components/ui/Modal";
 import { fullName } from "@/lib/utils";
+import { IconCheck } from "@tabler/icons-react";
 
 const LIMIT = 10;
 
@@ -151,6 +152,24 @@ export default function LecturerManagementPage() {
                         <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-green-50 border border-green-100">
                             <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
                             <span className="text-xs text-green-700 font-medium">Đã liên kết</span>
+                        </div>
+                    ) : (
+                        <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200">
+                            Chưa có
+                        </span>
+                    )}
+                </div>
+            ),
+        },
+        {
+            key: "photo",
+            label: "Ảnh khuôn mặt",
+            render: (l) => (
+                <div className="flex items-center">
+                    {l.photos && l.photos.length > 0 ? (
+                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 border border-emerald-100">
+                            <IconCheck className="w-4 h-4 text-emerald-600" />
+                            <span className="text-xs text-emerald-700 font-medium">Đã đăng ký</span>
                         </div>
                     ) : (
                         <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200">

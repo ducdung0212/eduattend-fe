@@ -14,6 +14,9 @@ import { AttendanceRecordModal } from "./_components/AttendanceRecordModal";
 import { ExamScheduleGridView } from "./_components/ExamScheduleGridView";
 import { ExamPeriodManagerModal } from "./_components/ExamPeriodManagerModal";
 import { Input } from "@/components/ui/Input";
+import * as XLSX from "xlsx";
+import { ExamDetailView } from "@/components/shared/ExamDetailView";
+import { formatDateTime } from "@/lib/utils";
 
 export default function ExamScheduleManagementPage() {
     // --- State Modals ---
@@ -25,6 +28,7 @@ export default function ExamScheduleManagementPage() {
     const [editingExamSchedule, setEditingExamSchedule] = useState<ExamSchedule | null>(null);
     const [scheduleToDelete, setScheduleToDelete] = useState<ExamSchedule | null>(null);
     const [deleting, setDeleting] = useState(false);
+    const [viewState, setViewState] = useState<{ view: "list" } | { view: "detail"; schedule: ExamSchedule }>({ view: "list" });
 
     // --- State Data ---
     const [examSchedules, setExamSchedules] = useState<ExamSchedule[]>([]);
@@ -106,6 +110,63 @@ export default function ExamScheduleManagementPage() {
     // Tìm đợt thi đang chọn (để hiển thị khoảng ngày)
     const selectedPeriod = examPeriods.find((p) => p.id === selectedPeriodId);
 
+    const handleExportPeriod = async () => {
+        if (!selectedPeriodId) return;
+        const toastId = toast.loading("Đang tải dữ liệu ca thi...");
+        try {
+            const resSchedules = await api.get("/exam-schedules", {
+                params: {
+                    exam_period_id: selectedPeriodId,
+                    limit: 1000,
+                },
+            });
+            const schedules = resSchedules.data?.data as ExamSchedule[] || [];
+            if (schedules.length === 0) {
+                toast.error("Đợt thi này không có ca thi nào", { id: toastId });
+                return;
+            }
+
+            const wb = XLSX.utils.book_new();
+
+            for (const sch of schedules) {
+                const resRecords = await api.get("/attendance-records", {
+                    params: { exam_schedule_id: sch.id, limit: 1000 },
+                });
+                const records = resRecords.data?.data as any[] || [];
+
+                const data = records.map((r, index) => ({
+                    "STT": index + 1,
+                    "Mã SV": r.student?.student_code || "",
+                    "Họ tên": `${r.student?.last_name || ""} ${r.student?.first_name || ""}`.trim(),
+                    "Lớp": r.student?.class?.name || r.student?.class?.class_code || "",
+                    "Trạng thái": r.status === "present" ? "Có mặt" : r.status === "late" ? "Đi muộn" : r.status === "excused" ? "Có phép" : (r.attendance_time ? "Có mặt" : "Vắng mặt"),
+                    "Thời gian điểm danh": r.attendance_time ? formatDateTime(r.attendance_time) : "",
+                    "Ghi chú": r.note || "",
+                }));
+
+                const ws = XLSX.utils.json_to_sheet(data);
+                ws['!cols'] = [{ wch: 5 }, { wch: 15 }, { wch: 30 }, { wch: 15 }, { wch: 15 }, { wch: 25 }, { wch: 20 }];
+
+                let sheetName = `${sch.subject?.subject_code || "M"}_P${sch.room?.room_code || "X"}_Ca${sch.group || 1}`;
+                if (sheetName.length > 31) sheetName = sheetName.substring(0, 31);
+                
+                let finalSheetName = sheetName;
+                let counter = 1;
+                while (wb.SheetNames.includes(finalSheetName)) {
+                    finalSheetName = `${sheetName.substring(0, 28)}_${counter}`;
+                    counter++;
+                }
+                XLSX.utils.book_append_sheet(wb, ws, finalSheetName);
+            }
+
+            XLSX.writeFile(wb, `CaThi_${selectedPeriod?.name || "DotThi"}.xlsx`);
+            toast.success("Xuất dữ liệu thành công", { id: toastId });
+        } catch (err) {
+            console.error(err);
+            toast.error("Lỗi khi xuất dữ liệu", { id: toastId });
+        }
+    };
+
     return (
         <div className="space-y-4">
             {/* Header */}
@@ -115,6 +176,9 @@ export default function ExamScheduleManagementPage() {
                     <p className="text-sm text-slate-500 mt-0.5">Tổng quan và quản lý lịch thi trong hệ thống</p>
                 </div>
                 <div className="flex gap-2">
+                    {selectedPeriodId && (
+                        <Button variant="secondary" leftIcon="file-spreadsheet" onClick={handleExportPeriod} className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300">Xuất Excel Đợt thi</Button>
+                    )}
                     <Button variant="secondary" leftIcon="calendar-event" onClick={() => setPeriodManagerOpen(true)}>Đợt thi</Button>
                     <Button variant="secondary" leftIcon="upload" onClick={() => setImportModalOpen(true)}>Import Excel</Button>
                     <Button variant="primary" leftIcon="plus" onClick={() => handleOpenModal()}>Thêm lịch thi</Button>
@@ -122,84 +186,97 @@ export default function ExamScheduleManagementPage() {
             </div>
 
             <div className="bg-white border border-slate-200/70 rounded-xl overflow-hidden">
-                {/* Toolbar — Bộ lọc */}
-                <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 flex-wrap bg-slate-50/50">
-                    {/* Lọc theo đợt thi */}
-                    <div className="flex items-center gap-2">
-                        <label className="text-xs font-medium text-slate-500 whitespace-nowrap">Đợt thi:</label>
-                        <select
-                            value={selectedPeriodId}
-                            onChange={(e) => setSelectedPeriodId(e.target.value)}
-                            className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 max-w-[220px]"
-                        >
-                            <option value="">Tất cả</option>
-                            {examPeriods.map((p) => (
-                                <option key={p.id} value={p.id}>{p.name}</option>
-                            ))}
-                        </select>
-                    </div>
+                {viewState.view === "list" ? (
+                    <>
+                        {/* Toolbar — Bộ lọc */}
+                        <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 flex-wrap bg-slate-50/50">
+                            {/* Lọc theo đợt thi */}
+                            <div className="flex items-center gap-2">
+                                <label className="text-xs font-medium text-slate-500 whitespace-nowrap">Đợt thi:</label>
+                                <select
+                                    value={selectedPeriodId}
+                                    onChange={(e) => setSelectedPeriodId(e.target.value)}
+                                    className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 max-w-[220px]"
+                                >
+                                    <option value="">Tất cả</option>
+                                    {examPeriods.map((p) => (
+                                        <option key={p.id} value={p.id}>{p.name}</option>
+                                    ))}
+                                </select>
+                            </div>
 
-                    {/* Divider */}
-                    <div className="w-px h-5 bg-slate-200" />
+                            {/* Divider */}
+                            <div className="w-px h-5 bg-slate-200" />
 
-                    {/* Lọc theo ngày */}
-                    <div className="flex items-center gap-2 flex-1">
-                        <button
-                            onClick={() => setGridDate(addDays(gridDate, -1))}
-                            className="h-8 w-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-lg leading-none"
-                            aria-label="Ngày trước"
-                        >
-                            ‹
-                        </button>
-                        <span className="text-sm font-medium text-slate-700 min-w-[190px] text-center">
-                            {formatDateVN(gridDate)}
-                        </span>
-                        <button
-                            onClick={() => setGridDate(addDays(gridDate, 1))}
-                            className="h-8 w-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-lg leading-none"
-                            aria-label="Ngày sau"
-                        >
-                            ›
-                        </button>
-                        <Input
-                            type="date"
-                            value={gridDate}
-                            onChange={(e) => setGridDate(e.target.value)}
-                            className="h-8"
+                            {/* Lọc theo ngày */}
+                            <div className="flex items-center gap-2 flex-1">
+                                <button
+                                    onClick={() => setGridDate(addDays(gridDate, -1))}
+                                    className="h-8 w-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-lg leading-none"
+                                    aria-label="Ngày trước"
+                                >
+                                    ‹
+                                </button>
+                                <span className="text-sm font-medium text-slate-700 min-w-[190px] text-center">
+                                    {formatDateVN(gridDate)}
+                                </span>
+                                <button
+                                    onClick={() => setGridDate(addDays(gridDate, 1))}
+                                    className="h-8 w-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-lg leading-none"
+                                    aria-label="Ngày sau"
+                                >
+                                    ›
+                                </button>
+                                <Input
+                                    type="date"
+                                    value={gridDate}
+                                    onChange={(e) => setGridDate(e.target.value)}
+                                    className="h-8"
+                                />
+                                <Button
+                                    variant="secondary"
+                                    onClick={() => setGridDate(todayString())}
+                                    className="h-8"
+                                >
+                                    Hôm nay
+                                </Button>
+                            </div>
+                        </div>
+
+                        {/* Badge hiển thị khoảng ngày đợt thi */}
+                        {selectedPeriod && (
+                            <div className="flex items-center gap-2 px-4 py-2 bg-blue-50/50 border-b border-blue-100 text-xs text-blue-700">
+                                <i className="ti ti-calendar-event text-sm" />
+                                <span className="font-medium">{selectedPeriod.name}</span>
+                                <span className="text-blue-400">·</span>
+                                <span>
+                                    {new Date(selectedPeriod.start_date).toLocaleDateString("vi-VN")}
+                                    {" → "}
+                                    {new Date(selectedPeriod.end_date).toLocaleDateString("vi-VN")}
+                                </span>
+                            </div>
+                        )}
+
+                        {/* Nội dung — Grid View */}
+                        <ExamScheduleGridView
+                            examSchedules={examSchedules}
+                            loading={loading}
+                            onEdit={handleOpenModal}
+                            onDelete={setScheduleToDelete}
+                            onManageStudents={setAttendanceRecordModal}
+                            onManageSupervisors={setExamSupervisorModal}
+                            onViewDetails={(schedule) => setViewState({ view: "detail", schedule })}
                         />
-                        <Button
-                            variant="secondary"
-                            onClick={() => setGridDate(todayString())}
-                            className="h-8"
-                        >
-                            Hôm nay
-                        </Button>
-                    </div>
-                </div>
-
-                {/* Badge hiển thị khoảng ngày đợt thi */}
-                {selectedPeriod && (
-                    <div className="flex items-center gap-2 px-4 py-2 bg-blue-50/50 border-b border-blue-100 text-xs text-blue-700">
-                        <i className="ti ti-calendar-event text-sm" />
-                        <span className="font-medium">{selectedPeriod.name}</span>
-                        <span className="text-blue-400">·</span>
-                        <span>
-                            {new Date(selectedPeriod.start_date).toLocaleDateString("vi-VN")}
-                            {" → "}
-                            {new Date(selectedPeriod.end_date).toLocaleDateString("vi-VN")}
-                        </span>
+                    </>
+                ) : (
+                    <div className="p-4">
+                        <ExamDetailView
+                            schedule={viewState.schedule}
+                            onBack={() => setViewState({ view: "list" })}
+                            hideAttendanceButton={true}
+                        />
                     </div>
                 )}
-
-                {/* Nội dung — Grid View */}
-                <ExamScheduleGridView
-                    examSchedules={examSchedules}
-                    loading={loading}
-                    onEdit={handleOpenModal}
-                    onDelete={setScheduleToDelete}
-                    onManageStudents={setAttendanceRecordModal}
-                    onManageSupervisors={setExamSupervisorModal}
-                />
             </div>
 
             {/* Modals */}

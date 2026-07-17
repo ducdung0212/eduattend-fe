@@ -34,6 +34,7 @@ export default function StudentManagementPage() {
     const [search, setSearch] = useState("");
     const [facultyCode, setFacultyCode] = useState("");
     const [classCode, setClassCode] = useState("");
+    const [isHasPhoto, setIsHasPhoto] = useState<string>("");
     
     // --- State Dropdowns ---
     const [faculties, setFaculties] = useState<Faculty[]>([]);
@@ -84,6 +85,7 @@ export default function StudentManagementPage() {
                     search: search || undefined,
                     faculty_code: facultyCode || undefined,
                     class_code: classCode || undefined,
+                    is_has_photo: isHasPhoto || undefined,
                 }
             });
             setStudents(res.data?.data ?? []);
@@ -94,7 +96,7 @@ export default function StudentManagementPage() {
         } finally {
             setLoading(false);
         }
-    }, [page, search, facultyCode, classCode]);
+    }, [page, search, facultyCode, classCode, isHasPhoto]);
 
     // Debounce cho ô tìm kiếm
     useEffect(() => {
@@ -125,6 +127,11 @@ export default function StudentManagementPage() {
 
     const handleClassChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         setClassCode(e.target.value);
+        resetPage();
+    }
+
+    const handlePhotoFilterChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        setIsHasPhoto(e.target.value);
         resetPage();
     }
 
@@ -289,6 +296,17 @@ export default function StudentManagementPage() {
                                 {c.class_code} - {c.name}
                             </option>
                         ))}
+                    </select>
+
+                    {/* Filter Hình ảnh */}
+                    <select
+                        value={isHasPhoto}
+                        onChange={handlePhotoFilterChange}
+                        className="h-9 px-3 text-sm text-slate-900 rounded-lg border border-slate-200 bg-white outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 min-w-[150px]"
+                    >
+                        <option value="">-- Trạng thái ảnh --</option>
+                        <option value="true">Đã có ảnh</option>
+                        <option value="false">Chưa có ảnh</option>
                     </select>
                 </div>
 

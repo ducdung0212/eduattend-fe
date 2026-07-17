@@ -21,6 +21,10 @@ export interface LoginPayload {
   password: string;
 }
 
+export interface LoginFacePayload {
+  imageBase64: string;
+}
+
 export interface LoginResponse {
   accessToken: string;
   refreshToken: string;

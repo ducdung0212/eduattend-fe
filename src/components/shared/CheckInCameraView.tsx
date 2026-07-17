@@ -6,9 +6,10 @@ import { formatTime, todayString } from "@/lib/utils";
 import { ExamSchedule } from "@/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
-import { FaceDetector, FilesetResolver } from "@mediapipe/tasks-vision";
+import { useFaceDetectionCamera } from "@/hooks/useFaceDetectionCamera";
 import { Modal } from "@/components/ui/Modal";
 import { SearchBar } from "./SearchBar";
+import { Scanner } from '@yudiel/react-qr-scanner';
 
 interface Props {
     open: boolean;
@@ -26,6 +27,7 @@ interface CheckInResult {
     success: boolean;
     message: string;
     alreadyCheckedIn?: boolean;
+    method?: 'face' | 'qr';
 }
 
 export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props) {
@@ -34,24 +36,25 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
     const [studentSearch, setStudentSearch] = useState("");
     const [studentSearchResults, setStudentSearchResults] = useState<ExamSchedule[]>([]);
     const [searchingStudent, setSearchingStudent] = useState(false);
+    const [activeTab, setActiveTab] = useState<"face" | "qr">("face");
+    const [isScanningQR, setIsScanningQR] = useState(true);
 
-    const videoRef = useRef<HTMLVideoElement>(null);
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const streamRef = useRef<MediaStream | null>(null);
-    const intervalRef = useRef<NodeJS.Timeout | null>(null);
-    const detectorRef = useRef<FaceDetector | null>(null);
-    const animationFrameRef = useRef<number | null>(null);
-    const videoFrameRef = useRef<number | null>(null);
-    const lastVideoTimeRef = useRef<number>(-1);
-    const detectCanvasRef = useRef<HTMLCanvasElement | null>(null);
+    const {
+        videoRef,
+        canvasRef,
+        isCameraOn,
+        isLoadingAI,
+        faceCount,
+        facingMode,
+        startCamera,
+        stopCamera,
+        switchCamera,
+        handleVideoPlay,
+        detectFacesCurrentFrame
+    } = useFaceDetectionCamera("environment");
 
-    const [isModelLoaded, setIsModelLoaded] = useState(false);
-    const [isCameraOn, setIsCameraOn] = useState(false);
-    const [isLoadingAI, setIsLoadingAI] = useState(true);
     const [isCheckingIn, setIsCheckingIn] = useState(false);
     const [results, setResults] = useState<CheckInResult[]>([]);
-    const [faceCount, setFaceCount] = useState(0);
-    const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
 
     const startStr = formatTime(schedule.start_time);
     const endDate = new Date(new Date(schedule.start_time).getTime() + (schedule.duration ?? 120) * 60000);
@@ -85,197 +88,23 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
 
     // Bật camera khi modal mở
     useEffect(() => {
-        if (open) {
-            startCamera(facingMode);
+        if (open && activeTab === "face") {
+            startCamera();
         } else {
             stopCamera();
+        }
+        if (!open) {
             setResults([]);
+            setActiveTab("face");
         }
         return () => {
             stopCamera();
         };
-    }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
-
-
-
-    const startCamera = async (currentFacingMode: "environment" | "user" = facingMode) => {
-        setIsLoadingAI(true);
-        try {
-            // Tải model AI MediaPipe
-            const vision = await FilesetResolver.forVisionTasks("/wasm");
-            let detector: FaceDetector;
-
-            try {
-                // Thử khởi tạo với GPU
-                detector = await FaceDetector.createFromOptions(vision, {
-                    baseOptions: {
-                        modelAssetPath: "/models/blaze_face_full_range.tflite",
-                        delegate: "GPU"
-                    },
-                    runningMode: "VIDEO",
-                    minDetectionConfidence: 0.4
-                });
-            } catch (gpuError) {
-                console.warn("GPU delegate failed, falling back to CPU", gpuError);
-                // Fallback CPU
-                detector = await FaceDetector.createFromOptions(vision, {
-                    baseOptions: {
-                        modelAssetPath: "/models/blaze_face_short_range.tflite",
-                        delegate: "CPU"
-                    },
-                    runningMode: "VIDEO",
-                    minDetectionConfidence: 0.5
-                });
-            }
-
-            detectorRef.current = detector;
-            setIsModelLoaded(true);
-
-            // Bật camera
-            const stream = await navigator.mediaDevices.getUserMedia({
-                // Giảm resolution xuống 640x480 (tối ưu nhất cho điện thoại)
-                video: { facingMode: currentFacingMode, width: { ideal: 640 }, height: { ideal: 480 } },
-            });
-            streamRef.current = stream;
-
-            if (videoRef.current) {
-                videoRef.current.srcObject = stream;
-            }
-            setIsCameraOn(true);
-        } catch (error) {
-            console.error("Lỗi bật camera:", error);
-            toast.error("Không thể bật Camera hoặc tải AI. Hãy kiểm tra quyền truy cập.");
-        } finally {
-            setIsLoadingAI(false);
-        }
-    };
-
-    const stopCamera = () => {
-        if (intervalRef.current) {
-            clearTimeout(intervalRef.current);
-            intervalRef.current = null;
-        }
-        if (videoFrameRef.current && videoRef.current && 'cancelVideoFrameCallback' in videoRef.current) {
-            // @ts-ignore
-            videoRef.current.cancelVideoFrameCallback(videoFrameRef.current);
-            videoFrameRef.current = null;
-        }
-        if (animationFrameRef.current) {
-            cancelAnimationFrame(animationFrameRef.current);
-            animationFrameRef.current = null;
-        }
-        if (streamRef.current) {
-            streamRef.current.getTracks().forEach((track) => track.stop());
-            streamRef.current = null;
-        }
-        if (detectorRef.current) {
-            detectorRef.current.close();
-            detectorRef.current = null;
-        }
-        setIsCameraOn(false);
-        setIsModelLoaded(false);
-        setFaceCount(0);
-    };
-
-    // Face detection loop
-    const handleVideoPlay = () => {
-        if (!videoRef.current || !canvasRef.current || !detectorRef.current) return;
-
-        if (videoFrameRef.current && 'cancelVideoFrameCallback' in videoRef.current) {
-            // @ts-ignore
-            videoRef.current.cancelVideoFrameCallback(videoFrameRef.current);
-            videoFrameRef.current = null;
-        }
-        if (animationFrameRef.current) {
-            cancelAnimationFrame(animationFrameRef.current);
-            animationFrameRef.current = null;
-        }
-
-        const video = videoRef.current;
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext("2d");
-
-        if (!detectCanvasRef.current) {
-            detectCanvasRef.current = document.createElement("canvas");
-            detectCanvasRef.current.width = 320;
-            detectCanvasRef.current.height = 240;
-        }
-
-        let lastDetectionTime = 0;
-
-        const detectLoop = (now: number = performance.now()) => {
-            if (video.paused || video.ended || !detectorRef.current) return;
-
-            if (now - lastDetectionTime >= 100) {
-                lastDetectionTime = now;
-                lastVideoTimeRef.current = video.currentTime;
-
-                // Map dimensions
-                if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                }
-
-                try {
-                    const dctx = detectCanvasRef.current!.getContext("2d")!;
-                    dctx.drawImage(video, 0, 0, 320, 240);
-
-                    const result = detectorRef.current.detectForVideo(detectCanvasRef.current!, now);
-                    const detections = result.detections;
-                    setFaceCount(detections.length);
-
-                    if (ctx) {
-                        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-                        const scaleX = video.videoWidth / 320;
-                        const scaleY = video.videoHeight / 240;
-
-                        detections.forEach((det) => {
-                            if (!det.boundingBox) return;
-                            const { originX, originY, width, height } = det.boundingBox;
-
-                            const x = originX * scaleX;
-                            const y = originY * scaleY;
-                            const w = width * scaleX;
-                            const h = height * scaleY;
-
-                            ctx.strokeStyle = "#22c55e";
-                            ctx.lineWidth = 2.5;
-                            ctx.strokeRect(x, y, w, h);
-
-                            // Label
-                            ctx.fillStyle = "rgba(34, 197, 94, 0.85)";
-                            ctx.fillRect(x, y - 20, 80, 20);
-                            ctx.fillStyle = "#fff";
-                            ctx.font = "bold 11px Inter, sans-serif";
-                            const score = det.categories[0]?.score ?? 0;
-                            ctx.fillText(`Face ${(score * 100).toFixed(0)}%`, x + 4, y - 6);
-                        });
-                    }
-                } catch (e) {
-                    console.error("Detect error:", e);
-                }
-            }
-
-            if ('requestVideoFrameCallback' in video) {
-                // @ts-ignore
-                videoFrameRef.current = video.requestVideoFrameCallback(detectLoop);
-            } else {
-                animationFrameRef.current = requestAnimationFrame(() => detectLoop(performance.now()));
-            }
-        };
-
-        if ('requestVideoFrameCallback' in video) {
-            // @ts-ignore
-            videoFrameRef.current = video.requestVideoFrameCallback(detectLoop);
-        } else {
-            animationFrameRef.current = requestAnimationFrame(() => detectLoop(performance.now()));
-        }
-    };
+    }, [open, activeTab, startCamera, stopCamera]);
 
     // Chụp ảnh & Điểm danh (hỗ trợ multi-face bằng cách crop)
         const handleCheckIn = useCallback(async () => {
-            if (!videoRef.current || !canvasRef.current || !detectorRef.current) return;
+            if (!videoRef.current || !canvasRef.current) return;
             setIsCheckingIn(true);
             setResults([]); // Xoá kết quả cũ trước khi điểm danh lượt mới
 
@@ -283,9 +112,7 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
             video.pause(); // Freeze the camera frame
 
             try {
-                // Sử dụng MediaPipe để detect trên frame hiện tại
-                const result = detectorRef.current.detectForVideo(video, performance.now());
-                const detections = result.detections;
+                const detections = detectFacesCurrentFrame();
 
                 if (detections.length === 0) {
                     toast.error("Không phát hiện được khuôn mặt nào trong khung hình");
@@ -355,7 +182,7 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
                     videoRef.current.play().catch(e => console.error("Cannot resume video", e));
                 }
             }
-        }, [schedule.id]); // eslint-disable-line react-hooks/exhaustive-deps
+        }, [schedule.id, detectFacesCurrentFrame]); // eslint-disable-line react-hooks/exhaustive-deps
 
         const sendCheckIn = async (canvas: HTMLCanvasElement) => {
             return new Promise<void>((resolve) => {
@@ -393,6 +220,7 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
                                 student_name: `${student?.last_name || ""} ${student?.first_name || ""}`.trim(),
                                 confidence: data?.confidence || 0,
                                 alreadyCheckedIn: data?.alreadyCheckedIn,
+                                method: 'face'
                             });
 
                             if (!data?.alreadyCheckedIn) {
@@ -408,6 +236,7 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
                                 student_code: "",
                                 student_name: "",
                                 confidence: 0,
+                                method: 'face'
                             });
                         } finally {
                             resolve();
@@ -426,6 +255,58 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
                 time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
             };
             setResults((prev) => [result, ...prev]);
+        };
+
+        const handleScanQR = async (text: string) => {
+            if (!isScanningQR) return;
+            
+            const match = text.match(/(DH|LT)\d{8}/i);
+            if (!match) return;
+
+            const student_code = match[0].toUpperCase();
+            setIsScanningQR(false);
+
+            try {
+                const res = await api.post(`/attendance-records/check-in/qr`, {
+                    exam_schedule_id: schedule.id,
+                    student_code: student_code
+                });
+
+                const data = res.data?.data;
+                const student = data?.existingStudent;
+                const msg = res.data?.message || "Điểm danh thành công";
+
+                addResult({
+                    success: true,
+                    message: msg,
+                    student_code: student?.student_code || student_code,
+                    student_name: `${student?.last_name || ""} ${student?.first_name || ""}`.trim(),
+                    confidence: 100,
+                    alreadyCheckedIn: data?.alreadyCheckedIn,
+                    method: 'qr'
+                });
+
+                if (!data?.alreadyCheckedIn) {
+                    onSuccess?.();
+                }
+            } catch (err: any) {
+                const msg = err.response?.data?.message || "Lỗi khi điểm danh";
+                const errMsg = Array.isArray(msg) ? msg.join(", ") : msg;
+
+                addResult({
+                    success: false,
+                    message: errMsg,
+                    student_code: student_code,
+                    student_name: "",
+                    confidence: 0,
+                    method: 'qr'
+                });
+            } finally {
+                // Đợi 2 giây mới cho quét tiếp để tránh spam request liên tục
+                setTimeout(() => {
+                    setIsScanningQR(true);
+                }, 2000);
+            }
         };
 
         return (
@@ -448,28 +329,70 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
                         )}
                     </div>
 
+                    <div className="flex bg-slate-100 p-1 rounded-lg">
+                        <button
+                            className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'face' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            onClick={() => setActiveTab('face')}
+                        >
+                            <i className="ti ti-camera mr-2" />
+                            Khuôn mặt
+                        </button>
+                        <button
+                            className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'qr' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            onClick={() => setActiveTab('qr')}
+                        >
+                            <i className="ti ti-qrcode mr-2" />
+                            Mã QR
+                        </button>
+                    </div>
+
                     {/* Camera */}
                     <div className="bg-white border border-slate-200/70 rounded-xl overflow-hidden">
                         <div className="relative w-full bg-black aspect-video flex items-center justify-center">
-                            {isLoadingAI && (
-                                <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
-                                    <span className="w-10 h-10 rounded-full border-[3px] border-slate-600 border-t-blue-400 animate-spin mb-3" />
-                                    <span className="text-slate-300 text-sm font-medium">Đang khởi động Camera và AI...</span>
+                            {activeTab === 'face' ? (
+                                <>
+                                    {isLoadingAI && (
+                                        <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
+                                            <span className="w-10 h-10 rounded-full border-[3px] border-slate-600 border-t-blue-400 animate-spin mb-3" />
+                                            <span className="text-slate-300 text-sm font-medium">Đang khởi động Camera và AI...</span>
+                                        </div>
+                                    )}
+
+                                    <video
+                                        ref={videoRef}
+                                        autoPlay
+                                        muted
+                                        playsInline
+                                        onPlay={handleVideoPlay}
+                                        className={`w-full h-full object-cover ${!isCameraOn ? "opacity-0" : "opacity-100"} transition-opacity`}
+                                    />
+                                    <canvas
+                                        ref={canvasRef}
+                                        className="absolute top-0 left-0 w-full h-full object-cover pointer-events-none"
+                                    />
+                                </>
+                            ) : (
+                                <div className="w-full h-full">
+                                    <Scanner 
+                                        onScan={(detectedCodes) => {
+                                            if (detectedCodes.length > 0) {
+                                                handleScanQR(detectedCodes[0].rawValue);
+                                            }
+                                        }}
+                                        paused={!isScanningQR}
+                                        formats={['qr_code']}
+                                        styles={{
+                                            container: { width: '100%', height: '100%' },
+                                            video: { objectFit: 'cover' }
+                                        }}
+                                    />
+                                    {!isScanningQR && (
+                                        <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-10">
+                                            <span className="w-8 h-8 rounded-full border-2 border-white/20 border-t-white animate-spin" />
+                                        </div>
+                                    )}
                                 </div>
                             )}
-
-                            <video
-                                ref={videoRef}
-                                autoPlay
-                                muted
-                                playsInline
-                                onPlay={handleVideoPlay}
-                                className={`w-full h-full object-cover ${!isCameraOn ? "opacity-0" : "opacity-100"} transition-opacity`}
-                            />
-                            <canvas
-                                ref={canvasRef}
-                                className="absolute top-0 left-0 w-full h-full object-cover pointer-events-none"
-                            />
                         </div>
 
                         {/* Tìm kiếm SV trong ngày */}
@@ -527,35 +450,32 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
                         </div>
 
                         {/* Nút chụp */}
-                        <div className="flex items-center justify-center gap-3 px-4 py-4 border-t border-slate-100">
-                            <Button
-                                variant="primary"
-                                size="lg"
-                                leftIcon="camera"
-                                loading={isCheckingIn}
-                                disabled={!isCameraOn || isLoadingAI}
-                                onClick={handleCheckIn}
-                                className="px-8"
-                            >
-                                Chụp ảnh & Điểm danh
-                            </Button>
-
-                            {isCameraOn && (
+                        {activeTab === 'face' && (
+                            <div className="flex items-center justify-center gap-3 px-4 py-4 border-t border-slate-100">
                                 <Button
-                                    variant="secondary"
+                                    variant="primary"
                                     size="lg"
-                                    onClick={() => {
-                                        const newMode = facingMode === "environment" ? "user" : "environment";
-                                        setFacingMode(newMode);
-                                        stopCamera();
-                                        startCamera(newMode);
-                                    }}
-                                    disabled={isCheckingIn}
+                                    leftIcon="camera"
+                                    loading={isCheckingIn}
+                                    disabled={!isCameraOn || isLoadingAI}
+                                    onClick={handleCheckIn}
+                                    className="px-8"
                                 >
-                                    <i className="ti ti-refresh text-base" />
+                                    Chụp ảnh & Điểm danh
                                 </Button>
-                            )}
-                        </div>
+
+                                {isCameraOn && (
+                                    <Button
+                                        variant="secondary"
+                                        size="lg"
+                                        onClick={switchCamera}
+                                        disabled={isCheckingIn}
+                                    >
+                                        <i className="ti ti-refresh text-base" />
+                                    </Button>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {/* Kết quả điểm danh hiển thị ngay dưới camera */}
@@ -594,7 +514,7 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
                                             <div className={`text-sm mt-0.5 ${!r.success ? 'text-red-700' : (r.alreadyCheckedIn ? 'text-amber-700 font-medium' : 'text-emerald-700')}`}>
                                                 {r.message}
                                             </div>
-                                            {r.success && !r.alreadyCheckedIn && (
+                                            {r.success && !r.alreadyCheckedIn && r.method !== 'qr' && (
                                                 <div className="text-[11px] text-slate-500 mt-1">
                                                     Độ tin cậy: {r.confidence.toFixed(1)}%
                                                 </div>

@@ -1,32 +1,87 @@
 "use client";
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { useFaceDetectionCamera } from "@/hooks/useFaceDetectionCamera";
 
 export default function LoginPage() {
-  const { login, loading } = useAuth();
+  const { login, loginFace, loading } = useAuth();
+  const [loginMethod, setLoginMethod] = useState<"password" | "face">("password");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  
+  const {
+    videoRef,
+    canvasRef,
+    isCameraOn,
+    isLoadingAI,
+    faceCount,
+    error: cameraError,
+    startCamera,
+    stopCamera,
+    handleVideoPlay,
+    detectFacesCurrentFrame,
+    captureFullFrame
+  } = useFaceDetectionCamera("user");
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  useEffect(() => {
+    if (loginMethod !== "face") {
+      stopCamera();
+    } else {
+      startCamera();
+    }
+    return () => stopCamera();
+  }, [loginMethod, startCamera, stopCamera]);
+
+  useEffect(() => {
+    if (cameraError) {
+      setError(cameraError);
+    }
+  }, [cameraError]);
+
+  const handleSubmitPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     try {
       await login({ email, password });
     } catch (err: any) {
-      // NestJS trả message dạng string hoặc string[]
       const msg = err?.response?.data?.message;
       setError(Array.isArray(msg) ? msg.join(", ") : (msg ?? "Email hoặc mật khẩu không đúng."));
     }
   };
 
+  const handleFaceLogin = useCallback(async () => {
+    setError("");
+    const detections = detectFacesCurrentFrame();
+    
+    if (detections.length === 0) {
+        setError("Không nhận diện được khuôn mặt nào. Vui lòng nhìn thẳng vào camera.");
+        return;
+    }
+    if (detections.length > 1) {
+        setError(`Phát hiện ${detections.length} khuôn mặt. Vui lòng đảm bảo chỉ có 1 người trong khung hình.`);
+        return;
+    }
+
+    const captureCanvas = captureFullFrame();
+    if (!captureCanvas) return;
+    
+    const imageBase64 = captureCanvas.toDataURL("image/jpeg", 0.9);
+    
+    try {
+      await loginFace({ imageBase64 });
+    } catch (err: any) {
+      const msg = err?.response?.data?.message;
+      setError(Array.isArray(msg) ? msg.join(", ") : (msg ?? "Xác thực khuôn mặt thất bại."));
+    }
+  }, [detectFacesCurrentFrame, captureFullFrame, loginFace]);
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
       <div className="w-full max-w-md">
 
-        {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex w-12 h-12 bg-slate-900 rounded-xl items-center justify-center mb-4">
             <span className="text-white text-xl font-bold">E</span>
@@ -35,11 +90,31 @@ export default function LoginPage() {
           <p className="mt-1 text-sm text-slate-500">Hệ thống điểm danh thông minh</p>
         </div>
 
-        {/* Card */}
         <div className="bg-white rounded-2xl border border-slate-200/70 shadow-sm p-8">
-          <h2 className="text-base font-medium text-slate-900 mb-6">Đăng nhập</h2>
+          
+          <div className="flex bg-slate-100 p-1 rounded-lg mb-6">
+            <button
+              onClick={() => setLoginMethod("password")}
+              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
+                loginMethod === "password"
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              Mật khẩu
+            </button>
+            <button
+              onClick={() => setLoginMethod("face")}
+              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
+                loginMethod === "face"
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              Khuôn mặt
+            </button>
+          </div>
 
-          {/* Error message từ backend */}
           {error && (
             <div className="mb-4 flex items-start gap-2.5 rounded-lg bg-red-50 border border-red-200 px-4 py-3">
               <i className="ti ti-alert-circle text-red-500 text-base mt-0.5 flex-shrink-0" aria-hidden="true" />
@@ -47,39 +122,99 @@ export default function LoginPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <Input
-              label="Email"
-              type="email"
-              required
-              leftIcon="mail"
-              placeholder="example@edu.vn"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-              disabled={loading}
-            />
-            <Input
-              label="Mật khẩu"
-              type="password"
-              required
-              leftIcon="lock"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              disabled={loading}
-            />
+          {loginMethod === "password" ? (
+            <form onSubmit={handleSubmitPassword} className="space-y-4">
+              <Input
+                label="Email"
+                type="email"
+                required
+                leftIcon="mail"
+                placeholder="example@edu.vn"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+                disabled={loading}
+              />
+              <Input
+                label="Mật khẩu"
+                type="password"
+                required
+                leftIcon="lock"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                disabled={loading}
+              />
 
-            <Button
-              type="submit"
-              variant="primary"
-              size="lg"
-              loading={loading}
-              className="w-full mt-2"
-            >
-              Đăng nhập
-            </Button>
-          </form>
+              <Button
+                type="submit"
+                variant="primary"
+                size="lg"
+                loading={loading}
+                className="w-full mt-2"
+              >
+                Đăng nhập
+              </Button>
+            </form>
+          ) : (
+            <div className="space-y-4 flex flex-col items-center">
+              <div className="w-full rounded-xl overflow-hidden border-2 border-slate-200 aspect-video relative bg-black flex items-center justify-center">
+                {isLoadingAI && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
+                        <span className="w-8 h-8 rounded-full border-[3px] border-slate-600 border-t-blue-400 animate-spin mb-3" />
+                        <span className="text-slate-300 text-sm font-medium">Đang tải AI...</span>
+                    </div>
+                )}
+                
+                <video
+                    ref={videoRef}
+                    autoPlay
+                    muted
+                    playsInline
+                    onPlay={handleVideoPlay}
+                    className={`w-full h-full object-cover transition-opacity ${!isCameraOn ? "opacity-0" : (loading ? "opacity-50" : "opacity-100")}`}
+                    style={{ transform: "scaleX(-1)" }} 
+                />
+                <canvas
+                    ref={canvasRef}
+                    className="absolute top-0 left-0 w-full h-full object-cover pointer-events-none"
+                    style={{ transform: "scaleX(-1)" }} 
+                />
+                
+                {isCameraOn && !loading && (
+                    <div className="absolute top-2 left-2 z-30">
+                        {faceCount === 1 ? (
+                            <span className="bg-emerald-500/90 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm">
+                                1 Khuôn mặt (Hợp lệ)
+                            </span>
+                        ) : faceCount > 1 ? (
+                            <span className="bg-red-500/90 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm">
+                                {faceCount} Khuôn mặt (Không hợp lệ)
+                            </span>
+                        ) : (
+                            <span className="bg-amber-500/90 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm">
+                                Chưa thấy khuôn mặt
+                            </span>
+                        )}
+                    </div>
+                )}
+              </div>
+              <p className="text-sm text-slate-500 text-center">
+                Vui lòng đưa 1 khuôn mặt lại gần camera để đăng nhập.
+              </p>
+              <Button
+                type="button"
+                variant="primary"
+                size="lg"
+                loading={loading}
+                onClick={handleFaceLogin}
+                className="w-full mt-2 shadow-md"
+                disabled={!isCameraOn || isLoadingAI || faceCount !== 1}
+              >
+                Quét khuôn mặt
+              </Button>
+            </div>
+          )}
         </div>
 
         <p className="text-center text-xs text-slate-400 mt-6">

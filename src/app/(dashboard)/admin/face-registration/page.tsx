@@ -10,18 +10,18 @@ import { IconCamera, IconCheck, IconX, IconTrash, IconAlertTriangle } from "@tab
 interface ImageItem {
     file: File;
     preview: string;
-    student_code: string;
+    user_code: string;
 }
 
-function parseStudentCodeFromFileName(fileName: string): string {
+function parseCodeFromFileName(fileName: string): string {
     const baseName = fileName.replace(/\.[^/.]+$/, "");
-    const match = baseName.match(/[A-Za-z]{0,5}\d{6,12}/);
-    return match ? match[0].toUpperCase() : "";
+    return baseName.toUpperCase().trim();
 }
 
 export default function FaceRegistrationPage() {
     const router = useRouter();
 
+    const [activeTab, setActiveTab] = useState<"student" | "lecturer">("student");
     const [images, setImages] = useState<ImageItem[]>([]);
     const [uploading, setUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -42,13 +42,13 @@ export default function FaceRegistrationPage() {
             } else if (file.size > 5 * 1024 * 1024) {
                 hasInvalidFile = true;
             } else {
-                const student_code = parseStudentCodeFromFileName(file.name);
-                if (!student_code) hasUnrecognizedCode = true;
+                const user_code = parseCodeFromFileName(file.name);
+                if (!user_code) hasUnrecognizedCode = true;
 
                 validImages.push({
                     file,
                     preview: URL.createObjectURL(file),
-                    student_code,
+                    user_code,
                 });
             }
         });
@@ -57,7 +57,7 @@ export default function FaceRegistrationPage() {
             toast.error("Một số file không hợp lệ (sai định dạng hoặc quá 5MB) đã bị bỏ qua.");
         }
         if (hasUnrecognizedCode) {
-            toast.error("Một số ảnh không nhận diện được MSSV từ tên file. Vui lòng đặt lại tên file cho đúng quy ước.");
+            toast.error("Một số ảnh không nhận diện được Mã từ tên file. Vui lòng đặt lại tên file cho đúng quy ước.");
         }
 
         setImages((prev) => [...prev, ...validImages]);
@@ -82,9 +82,9 @@ export default function FaceRegistrationPage() {
     const handleUploadS3 = async () => {
         if (images.length === 0) return toast.error("Vui lòng chọn ít nhất một ảnh.");
 
-        const missingCodeCount = images.filter((img) => !img.student_code).length;
+        const missingCodeCount = images.filter((img) => !img.user_code).length;
         if (missingCodeCount > 0) {
-            return toast.error(`Còn ${missingCodeCount} ảnh chưa nhận diện được MSSV. Vui lòng đặt lại tên file rồi chọn lại ảnh đó.`);
+            return toast.error(`Còn ${missingCodeCount} ảnh chưa nhận diện được Mã. Vui lòng đặt lại tên file rồi chọn lại ảnh đó.`);
         }
 
         setUploading(true);
@@ -96,7 +96,7 @@ export default function FaceRegistrationPage() {
                 fileType: img.file.type as "image/jpeg" | "image/png",
             }));
 
-            const generateRes = await api.post("/student-photos/generate-upload-urls", {
+            const generateRes = await api.post(`/${activeTab === 'student' ? 'student' : 'lecturer'}-photos/generate-upload-urls`, {
                 files: generatePayload,
             });
 
@@ -143,12 +143,15 @@ export default function FaceRegistrationPage() {
             }
 
             // [BƯỚC 3]: Gọi backend confirm các file đã upload S3 thành công
-            const confirmPayload = successfulUploads.map((r) => ({
-                fileName: r.img.file.name,
-                student_code: r.img.student_code,
-            }));
+            const confirmPayload = successfulUploads.map((r) => {
+                if (activeTab === "student") {
+                    return { fileName: r.img.file.name, student_code: r.img.user_code };
+                } else {
+                    return { fileName: r.img.file.name, lecturer_code: r.img.user_code };
+                }
+            });
 
-            const confirmRes = await api.post("/student-photos/confirm-uploads", {
+            const confirmRes = await api.post(`/${activeTab === 'student' ? 'student' : 'lecturer'}-photos/confirm-uploads`, {
                 uploads: confirmPayload,
             });
 
@@ -232,28 +235,52 @@ export default function FaceRegistrationPage() {
         }
     };
 
-    const uniqueStudentCount = new Set(images.map((img) => img.student_code).filter(Boolean)).size;
-    const missingCodeCount = images.filter((img) => !img.student_code).length;
+            const uniqueUserCount = new Set(images.map((img) => img.user_code).filter(Boolean)).size;
+    const missingCodeCount = images.filter((img) => !img.user_code).length;
 
     return (
         <div className="max-w-4xl mx-auto space-y-6">
+            {/* Tabs */}
+            <div className="flex border-b border-slate-200">
+                <button
+                    className={`py-3 px-6 text-sm font-medium border-b-2 transition-colors ${
+                        activeTab === "student"
+                            ? "border-blue-600 text-blue-600 bg-blue-50/50"
+                            : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+                    }`}
+                    onClick={() => { setActiveTab("student"); setImages([]); }}
+                >
+                    Đăng ký Sinh viên
+                </button>
+                <button
+                    className={`py-3 px-6 text-sm font-medium border-b-2 transition-colors ${
+                        activeTab === "lecturer"
+                            ? "border-blue-600 text-blue-600 bg-blue-50/50"
+                            : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+                    }`}
+                    onClick={() => { setActiveTab("lecturer"); setImages([]); }}
+                >
+                    Đăng ký Giảng viên
+                </button>
+            </div>
+
             {/* Header */}
             <div className="flex justify-between items-end">
                 <div>
                     <h1 className="text-xl font-medium text-slate-900 tracking-tight">
-                        Đăng ký ảnh khuôn mặt theo lô
+                        Đăng ký ảnh khuôn mặt {activeTab === "student" ? "sinh viên" : "giảng viên"} theo lô
                     </h1>
                     <p className="text-sm text-slate-500 mt-1">
-                        MSSV được tự nhận diện từ tên file ảnh đã chọn.
+                        Mã số được tự nhận diện từ tên file ảnh đã chọn.
                     </p>
                 </div>
                 <div className="flex flex-col items-end gap-1.5">
                     <div className="text-sm font-medium text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100">
-                        Đã chọn: {images.length} ảnh · {uniqueStudentCount} sinh viên
+                        Đã chọn: {images.length} ảnh · {uniqueUserCount} {activeTab === "student" ? "sinh viên" : "giảng viên"}
                     </div>
                     {missingCodeCount > 0 && (
                         <div className="text-xs font-medium text-rose-600 bg-rose-50 px-3 py-1 rounded-lg border border-rose-100 flex items-center gap-1">
-                            <IconAlertTriangle className="w-3.5 h-3.5" /> {missingCodeCount} ảnh thiếu MSSV
+                            <IconAlertTriangle className="w-3.5 h-3.5" /> {missingCodeCount} ảnh thiếu mã
                         </div>
                     )}
                 </div>
@@ -279,7 +306,7 @@ export default function FaceRegistrationPage() {
                             Nhấp hoặc quét khối để chọn nhiều ảnh
                         </div>
                         <div className="text-xs text-slate-400 mt-1">
-                            Tên file phải chứa MSSV. VD: DH52200529.png
+                            Tên file phải chứa {activeTab === "student" ? "MSSV (VD: DH52200529.png)" : "Mã GV (VD: GV001.png)"}
                             <br />
                             Hỗ trợ JPG, PNG (Tối đa 5MB/file)
                         </div>
@@ -291,7 +318,7 @@ export default function FaceRegistrationPage() {
                                 <div
                                     key={index}
                                     className={`relative group rounded-md overflow-hidden border bg-slate-100 aspect-square shadow-sm ${
-                                        img.student_code ? "border-slate-200" : "border-rose-300"
+                                        img.user_code ? "border-slate-200" : "border-rose-300"
                                     }`}
                                 >
                                     <img
@@ -302,10 +329,10 @@ export default function FaceRegistrationPage() {
 
                                     <div
                                         className={`absolute bottom-0 inset-x-0 text-white text-[10px] font-semibold text-center py-0.5 px-1 truncate ${
-                                            img.student_code ? "bg-black/60" : "bg-rose-600/90"
+                                            img.user_code ? "bg-black/60" : "bg-rose-600/90"
                                         }`}
                                     >
-                                        {img.student_code || "Chưa rõ MSSV"}
+                                        {img.user_code || "Chưa rõ mã"}
                                     </div>
 
                                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pb-3">
@@ -354,7 +381,7 @@ export default function FaceRegistrationPage() {
             <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl text-sm text-blue-800">
                 <strong className="block mb-1">Yêu cầu hình ảnh hợp lệ:</strong>
                 <ul className="list-disc list-inside space-y-1 ml-1 opacity-90">
-                    <li>Tên file phải chứa MSSV (hệ thống tự nhận diện, vd: DH52200529.png).</li>
+                    <li>Tên file phải chứa mã {activeTab === "student" ? "sinh viên" : "giảng viên"} (hệ thống tự nhận diện tên file).</li>
                     <li>Ảnh chụp rõ nét, nhìn thẳng vào ống kính.</li>
                     <li>Khuôn mặt chiếm tối thiểu 60% khung hình.</li>
                     <li>Không đeo kính râm, khẩu trang hoặc đội mũ che khuất trán.</li>

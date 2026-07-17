@@ -9,8 +9,8 @@ import { Button } from "@/components/ui/Button";
 import { SearchBar } from "@/components/shared/SearchBar";
 import { Modal } from "@/components/ui/Modal";
 import api from "@/lib/api";
-import { formatTime, formatDateTime } from "@/lib/utils";
-import { ExamSchedule, AttendanceRecord, ExamSupervisor } from "@/types";
+import { formatTime, formatDateTime, cn } from "@/lib/utils";
+import { ExamSchedule, AttendanceRecord, ExamSupervisor, RekognitionResult, AttendanceStatus } from "@/types";
 import { useCallback, useEffect, useState, useMemo } from "react";
 import toast from "react-hot-toast";
 import * as XLSX from "xlsx";
@@ -18,9 +18,10 @@ import * as XLSX from "xlsx";
 interface Props {
     schedule: ExamSchedule;
     onBack: () => void;
+    hideAttendanceButton?: boolean;
 }
 
-export function ExamDetailView({ schedule, onBack }: Props) {
+export function ExamDetailView({ schedule, onBack, hideAttendanceButton }: Props) {
     // ── Chi tiết ca thi ──────────────────────────────
     const [records, setRecords] = useState<AttendanceRecord[]>([]);
     const [supervisors, setSupervisors] = useState<ExamSupervisor[]>([]);
@@ -32,6 +33,7 @@ export function ExamDetailView({ schedule, onBack }: Props) {
 
     // ── Search & Filter ─────────────────────────────
     const [searchQuery, setSearchQuery] = useState("");
+    const [statusFilter, setStatusFilter] = useState<string>("all");
 
     // ── Image Modal ────────────────────────────────
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -48,7 +50,9 @@ export function ExamDetailView({ schedule, onBack }: Props) {
         setLoadingRecords(true);
         try {
             const res = await api.get("/attendance-records", {
-                params: { exam_schedule_id: schedule.id, limit: 200 },
+                params: { 
+                    exam_schedule_id: schedule.id,
+                    limit: 200 },
             });
             setRecords(res.data?.data ?? []);
         } catch {
@@ -106,16 +110,25 @@ export function ExamDetailView({ schedule, onBack }: Props) {
         });
     }, [records, nameSortDir]);
 
-    // Lọc theo tìm kiếm
+    // Lọc theo tìm kiếm và trạng thái
     const filteredRecords = useMemo(() => {
-        if (!searchQuery.trim()) return sortedRecords;
+        let result = sortedRecords;
+
+        if (statusFilter !== "all") {
+            result = result.filter(r => {
+                const currentStatus = r.status || (r.attendance_time ? "present" : "absent");
+                return currentStatus === statusFilter;
+            });
+        }
+
+        if (!searchQuery.trim()) return result;
         const q = searchQuery.toLowerCase();
-        return sortedRecords.filter(r => 
+        return result.filter(r => 
             r.student?.student_code?.toLowerCase().includes(q) ||
             r.student?.first_name?.toLowerCase().includes(q) ||
             r.student?.last_name?.toLowerCase().includes(q)
         );
-    }, [sortedRecords, searchQuery]);
+    }, [sortedRecords, searchQuery, statusFilter]);
 
     // Phân trang
     const totalPages = Math.ceil(filteredRecords.length / 20);
@@ -123,21 +136,22 @@ export function ExamDetailView({ schedule, onBack }: Props) {
     const paginatedRecords = filteredRecords.slice((page - 1) * limit, page * limit);
 
     // Thay đổi trạng thái điểm danh thủ công
-    const handleUpdateStatus = async (record: AttendanceRecord) => {
-        const isCheckedIn = !!record.attendance_time;
-        const newTime = isCheckedIn ? null : new Date().toISOString();
+    const handleUpdateStatus = async (record: AttendanceRecord, newStatus: AttendanceStatus) => {
+        const isPresentOrLate = newStatus === 'present' || newStatus === 'late';
+        const newTime = (isPresentOrLate && !record.attendance_time) ? new Date().toISOString() : (!isPresentOrLate ? null : record.attendance_time);
         
         // Optimistic update: cập nhật state ngay lập tức để giao diện phản hồi nhanh
-        setRecords(prev => prev.map(r => r.id === record.id ? { ...r, attendance_time: newTime as any } : r));
+        setRecords(prev => prev.map(r => r.id === record.id ? { ...r, status: newStatus, attendance_time: newTime as any } : r));
 
         try {
             await api.patch(`/attendance-records/${record.id}`, {
+                status: newStatus,
                 attendance_time: newTime,
             });
-            toast.success(isCheckedIn ? "Đã hủy điểm danh" : "Đã điểm danh");
+            toast.success("Đã cập nhật trạng thái");
         } catch (err: any) {
             // Rollback nếu API thất bại
-            setRecords(prev => prev.map(r => r.id === record.id ? { ...r, attendance_time: record.attendance_time } : r));
+            setRecords(prev => prev.map(r => r.id === record.id ? { ...r, status: record.status, attendance_time: record.attendance_time } : r));
             toast.error("Không thể cập nhật trạng thái");
         }
     };
@@ -246,24 +260,27 @@ export function ExamDetailView({ schedule, onBack }: Props) {
             key: 'status',
             label: 'Trạng thái',
             align: 'center',
-            render: (r) => (
-                <button
-                    onClick={() => handleUpdateStatus(r)}
-                    className="hover:opacity-80 transition-opacity focus:outline-none"
-                >
-                    {r.attendance_time ? (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            <i className="ti ti-check text-xs" />
-                            Đã điểm danh
-                        </span>
-                    ) : (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                            <i className="ti ti-clock text-xs" />
-                            Chờ điểm danh
-                        </span>
-                    )}
-                </button>
-            ),
+            render: (r) => {
+                const currentStatus = r.status || (r.attendance_time ? "present" : "absent");
+                return (
+                    <select
+                        value={currentStatus}
+                        onChange={(e) => handleUpdateStatus(r, e.target.value as AttendanceStatus)}
+                        className={cn(
+                            "text-[11px] font-semibold px-2 py-0.5 rounded-full outline-none border transition-colors cursor-pointer text-center",
+                            currentStatus === 'present' && "bg-emerald-50 text-emerald-700 border-emerald-200",
+                            currentStatus === 'late' && "bg-amber-50 text-amber-700 border-amber-200",
+                            currentStatus === 'excused' && "bg-blue-50 text-blue-700 border-blue-200",
+                            currentStatus === 'absent' && "bg-slate-50 text-slate-600 border-slate-200"
+                        )}
+                    >
+                        <option value="present">Có mặt</option>
+                        <option value="absent">Vắng mặt</option>
+                        <option value="late">Đi muộn</option>
+                        <option value="excused">Có phép</option>
+                    </select>
+                );
+            },
         },
         {
             key: 'note',
@@ -378,17 +395,19 @@ export function ExamDetailView({ schedule, onBack }: Props) {
             </div>
 
             {/* Nút bật camera */}
-            <div className="flex justify-center py-2">
-                <Button
-                    variant="primary"
-                    size="lg"
-                    leftIcon="camera"
-                    onClick={() => setIsCameraOpen(true)}
-                    className="px-8 shadow-md hover:shadow-lg transition-all"
-                >
-                    Bật Camera Điểm Danh
-                </Button>
-            </div>
+            {!hideAttendanceButton && (
+                <div className="flex justify-center py-2">
+                    <Button
+                        variant="primary"
+                        size="lg"
+                        leftIcon="camera"
+                        onClick={() => setIsCameraOpen(true)}
+                        className="px-8 shadow-md hover:shadow-lg transition-all"
+                    >
+                        Bật Camera Điểm Danh
+                    </Button>
+                </div>
+            )}
 
             {/* Danh sách thí sinh */}
             <div className="bg-white border border-slate-200/70 rounded-xl overflow-hidden">
@@ -404,6 +423,17 @@ export function ExamDetailView({ schedule, onBack }: Props) {
                         />
                     </div>
                     <div className="flex items-center gap-2">
+                        <select
+                            value={statusFilter}
+                            onChange={(e) => setStatusFilter(e.target.value)}
+                            className="h-6 text-[11px] rounded-md border border-slate-200 px-2 outline-none bg-white font-medium text-slate-600"
+                        >
+                            <option value="all">Tất cả TT</option>
+                            <option value="present">Có mặt</option>
+                            <option value="absent">Vắng mặt</option>
+                            <option value="late">Đi muộn</option>
+                            <option value="excused">Có phép</option>
+                        </select>
                         <Button 
                             variant="secondary" 
                             size="sm" 

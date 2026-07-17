@@ -11,6 +11,7 @@
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.35",
     "@tabler/icons-react": "^3.44.0",
+    "@yudiel/react-qr-scanner": "^2.6.0",
     "axios": "^1.16.0",
     "clsx": "^2.1.1",
     "dayjs": "^1.11.21",
@@ -21,6 +22,7 @@
     "react-dom": "19.2.4",
     "react-hot-toast": "^2.6.0",
     "react-webcam": "^7.2.0",
+    "recharts": "^3.9.2",
     "tailwind-merge": "^3.6.0",
     "xlsx": "^0.18.5"
   },

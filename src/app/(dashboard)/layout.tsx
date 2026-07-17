@@ -28,7 +28,7 @@ export default function DashboardLayout({
   const menuItems = getMenuByRole(user.role);
 
   return (
-    <div className="flex h-full w-full bg-gray-50 overflow-hidden">
+    <div className="flex h-screen w-full bg-gray-50 overflow-hidden">
       <Sidebar menuItems={menuItems} user={user} />
       <div className="flex flex-col flex-1 overflow-hidden">
         <Header user={user} />
