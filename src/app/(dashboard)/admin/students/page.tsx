@@ -15,7 +15,7 @@ import { Modal } from "@/components/ui/Modal";
 import { fullName } from "@/lib/utils";
 import { IconCheck } from "@tabler/icons-react";
 
-const LIMIT = 10;
+const LIMIT = 20;
 
 export default function StudentManagementPage() {
     // --- State Modals ---
