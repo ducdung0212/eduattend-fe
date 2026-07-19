@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import api from "@/lib/api";
-import { todayString, formatDateVN, addDays, formatTime } from "@/lib/utils";
+import { todayString, formatDateVN, addDays, formatTime, toYMD } from "@/lib/utils";
 import { ExamPeriod, ExamSchedule } from "@/types";
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
@@ -140,15 +140,59 @@ export default function ExamScheduleManagementPage() {
                 const resRecords = await api.get("/attendance-records", {
                     params: { exam_schedule_id: sch.id, limit: 1000 },
                 });
-                const records = resRecords.data?.data as any[] || [];
+                const rawRecords = resRecords.data?.data as any[] || [];
+                
+                // Sắp xếp ưu tiên: Lớp -> Tên -> Họ
+                const records = [...rawRecords].sort((a, b) => {
+                    const classA = a.student?.class?.name || a.student?.class?.class_code || "";
+                    const classB = b.student?.class?.name || b.student?.class?.class_code || "";
+                    if (classA !== classB) return classA.localeCompare(classB);
+
+                    const nameA = a.student?.first_name || "";
+                    const nameB = b.student?.first_name || "";
+                    if (nameA !== nameB) return nameA.localeCompare(nameB);
+
+                    const lastA = a.student?.last_name || "";
+                    const lastB = b.student?.last_name || "";
+                    return lastA.localeCompare(lastB);
+                });
+
+                let present = 0;
+                let late = 0;
+                let excused = 0;
+                let absent = 0;
+
+                records.forEach((r) => {
+                    if (r.status === "present" || (r.status !== "late" && r.status !== "excused" && r.attendance_time)) {
+                        present++;
+                    } else if (r.status === "late") {
+                        late++;
+                    } else if (r.status === "excused") {
+                        excused++;
+                    } else {
+                        absent++;
+                    }
+                });
+
+                const totalStudents = records.length;
+                const totalPresent = present + late; // Đi muộn tính vào có mặt
 
                 const aoaData: any[][] = [];
                 // Thông tin ca thi ở đầu sheet
                 aoaData.push(["THÔNG TIN CA THI"]);
                 aoaData.push(["Môn thi:", sch.subject?.name || "", "", "Mã môn:", sch.subject?.subject_code || ""]);
-                aoaData.push(["Phòng thi:", sch.room?.name || sch.room?.room_code || "", "", "Ngày thi:", sch.start_time ? formatDateVN(sch.start_time) : ""]);
+                aoaData.push(["Phòng thi:", sch.room?.name || sch.room?.room_code || "", "", "Ngày thi:", sch.start_time ? formatDateVN(toYMD(sch.start_time)) : ""]);
                 aoaData.push(["Giờ bắt đầu:", sch.start_time ? formatTime(sch.start_time) : "", "", "Thời lượng:", `${sch.duration || 120} phút`]);
                 aoaData.push(["Nhóm/Ca thi:", sch.group || "", "", "Giám thị:", (sch.supervisors || []).join(", ") || "Chưa phân công"]);
+                aoaData.push([]); // Dòng trống
+                
+                // Thống kê điểm danh
+                aoaData.push(["THỐNG KÊ ĐIỂM DANH"]);
+                aoaData.push(["Tổng thí sinh:", totalStudents]);
+                aoaData.push(["Có mặt:", totalPresent]);
+                aoaData.push(["Vắng mặt:", absent]);
+                aoaData.push(["Đi muộn:", late]);
+                aoaData.push(["Có phép:", excused]);
                 aoaData.push([]); // Dòng trống
 
                 // Tiêu đề bảng điểm danh
@@ -169,9 +213,10 @@ export default function ExamScheduleManagementPage() {
 
                 const ws = XLSX.utils.aoa_to_sheet(aoaData);
                 
-                // Merge cell cho tiêu đề "THÔNG TIN CA THI"
+                // Merge cell cho tiêu đề
                 ws["!merges"] = [
-                    { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }
+                    { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }, // THÔNG TIN CA THI
+                    { s: { r: 6, c: 0 }, e: { r: 6, c: 6 } }  // THỐNG KÊ ĐIỂM DANH
                 ];
 
                 ws['!cols'] = [{ wch: 15 }, { wch: 25 }, { wch: 30 }, { wch: 15 }, { wch: 30 }, { wch: 25 }, { wch: 20 }];

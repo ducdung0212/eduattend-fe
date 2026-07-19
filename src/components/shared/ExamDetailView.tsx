@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { SearchBar } from "@/components/shared/SearchBar";
 import { Modal } from "@/components/ui/Modal";
 import api from "@/lib/api";
-import { formatTime, formatDateTime, cn } from "@/lib/utils";
+import { formatTime, formatDateTime, cn, formatDateVN, toYMD } from "@/lib/utils";
 import { ExamSchedule, AttendanceRecord, ExamSupervisor, RekognitionResult, AttendanceStatus } from "@/types";
 import { useCallback, useEffect, useState, useMemo } from "react";
 import toast from "react-hot-toast";
@@ -29,7 +29,7 @@ export function ExamDetailView({ schedule, onBack, hideAttendanceButton }: Props
     const [loadingSupervisors, setLoadingSupervisors] = useState(true);
 
     // ── Trạng thái sắp xếp tên ───────────────────────
-    const [nameSortDir, setNameSortDir] = useState<'asc' | 'desc'>('asc');
+    const [nameSortDir, setNameSortDir] = useState<'asc' | 'desc' | 'none'>('none');
 
     // ── Search & Filter ─────────────────────────────
     const [searchQuery, setSearchQuery] = useState("");
@@ -89,24 +89,34 @@ export function ExamDetailView({ schedule, onBack, hideAttendanceButton }: Props
     // Sắp xếp: đã điểm danh lên đầu (mới nhất trước), chưa điểm danh xếp theo tên
     const sortedRecords = useMemo(() => {
         return [...records].sort((a, b) => {
-            const aChecked = !!a.attendance_time;
-            const bChecked = !!b.attendance_time;
+            if (nameSortDir === 'none') {
+                const aChecked = !!a.attendance_time;
+                const bChecked = !!b.attendance_time;
 
-            if (aChecked && bChecked) {
-                return new Date(b.attendance_time!).getTime() - new Date(a.attendance_time!).getTime(); // desc
+                if (aChecked && bChecked) {
+                    return new Date(b.attendance_time!).getTime() - new Date(a.attendance_time!).getTime(); // desc
+                }
+                if (aChecked) return -1;
+                if (bChecked) return 1;
+
+                const nameA = a.student?.first_name || "";
+                const nameB = b.student?.first_name || "";
+                if (nameA !== nameB) return nameA.localeCompare(nameB);
+
+                const lastA = a.student?.last_name || "";
+                const lastB = b.student?.last_name || "";
+                return lastA.localeCompare(lastB);
+            } else {
+                const order = nameSortDir === 'asc' ? 1 : -1;
+                const nameA = a.student?.first_name || "";
+                const nameB = b.student?.first_name || "";
+
+                if (nameA !== nameB) return nameA.localeCompare(nameB) * order;
+
+                const lastA = a.student?.last_name || "";
+                const lastB = b.student?.last_name || "";
+                return lastA.localeCompare(lastB) * order;
             }
-            if (aChecked) return -1;
-            if (bChecked) return 1;
-
-            const nameA = a.student?.first_name || "";
-            const nameB = b.student?.first_name || "";
-            const order = nameSortDir === 'asc' ? 1 : -1;
-
-            if (nameA !== nameB) return nameA.localeCompare(nameB) * order;
-
-            const lastA = a.student?.last_name || "";
-            const lastB = b.student?.last_name || "";
-            return lastA.localeCompare(lastB) * order;
         });
     }, [records, nameSortDir]);
 
@@ -177,29 +187,85 @@ export function ExamDetailView({ schedule, onBack, hideAttendanceButton }: Props
 
     // Xuất Excel
     const exportToExcel = () => {
-        const data = sortedRecords.map((r, index) => ({
-            "STT": index + 1,
-            "Mã SV": r.student?.student_code || "",
-            "Họ tên": `${r.student?.last_name || ""} ${r.student?.first_name || ""}`.trim(),
-            "Lớp": r.student?.class?.name || r.student?.class?.class_code || "",
-            "Trạng thái": r.attendance_time ? "Đã điểm danh" : "Chờ điểm danh",
-            "Thời gian điểm danh": r.attendance_time ? formatDateTime(r.attendance_time) : "",
-            "Ghi chú": r.note || "",
-        }));
+        // Sắp xếp ưu tiên: Lớp -> Tên -> Họ
+        const exportRecords = [...records].sort((a, b) => {
+            const classA = a.student?.class?.name || a.student?.class?.class_code || "";
+            const classB = b.student?.class?.name || b.student?.class?.class_code || "";
+            if (classA !== classB) return classA.localeCompare(classB);
 
-        const ws = XLSX.utils.json_to_sheet(data);
+            const nameA = a.student?.first_name || "";
+            const nameB = b.student?.first_name || "";
+            if (nameA !== nameB) return nameA.localeCompare(nameB);
+
+            const lastA = a.student?.last_name || "";
+            const lastB = b.student?.last_name || "";
+            return lastA.localeCompare(lastB);
+        });
+
+        let present = 0;
+        let late = 0;
+        let excused = 0;
+        let absent = 0;
+
+        exportRecords.forEach((r) => {
+            const currentStatus = r.status || (r.attendance_time ? "present" : "absent");
+            if (currentStatus === "present") present++;
+            else if (currentStatus === "late") late++;
+            else if (currentStatus === "excused") excused++;
+            else absent++;
+        });
+
+        const totalStudents = exportRecords.length;
+        const totalPresent = present + late; // Đi muộn tính vào có mặt
+
+        const aoaData: any[][] = [];
+        // Thông tin ca thi ở đầu sheet
+        aoaData.push(["THÔNG TIN CA THI"]);
+        aoaData.push(["Môn thi:", schedule.subject?.name || "", "", "Mã môn:", schedule.subject?.subject_code || ""]);
+        aoaData.push(["Phòng thi:", schedule.room?.name || schedule.room?.room_code || "", "", "Ngày thi:", schedule.start_time ? formatDateVN(toYMD(schedule.start_time)) : ""]);
+        aoaData.push(["Giờ bắt đầu:", schedule.start_time ? formatTime(schedule.start_time) : "", "", "Thời lượng:", `${schedule.duration || 120} phút`]);
+        aoaData.push(["Nhóm/Ca thi:", schedule.group || "", "", "Giám thị:", (supervisors || []).map(s => `${s.lecturer?.last_name || ""} ${s.lecturer?.first_name || ""}`.trim()).join(", ") || "Chưa phân công"]);
+        aoaData.push([]); // Dòng trống
+        
+        // Thống kê điểm danh
+        aoaData.push(["THỐNG KÊ ĐIỂM DANH"]);
+        aoaData.push(["Tổng thí sinh:", totalStudents]);
+        aoaData.push(["Có mặt:", totalPresent]);
+        aoaData.push(["Vắng mặt:", absent]);
+        aoaData.push(["Đi muộn:", late]);
+        aoaData.push(["Có phép:", excused]);
+        aoaData.push([]); // Dòng trống
+
+        // Tiêu đề bảng điểm danh
+        aoaData.push(["STT", "Mã SV", "Họ tên", "Lớp", "Trạng thái", "Thời gian điểm danh", "Ghi chú"]);
+
+        // Dữ liệu điểm danh
+        exportRecords.forEach((r, index) => {
+            const currentStatus = r.status || (r.attendance_time ? "present" : "absent");
+            aoaData.push([
+                index + 1,
+                r.student?.student_code || "",
+                `${r.student?.last_name || ""} ${r.student?.first_name || ""}`.trim(),
+                r.student?.class?.name || r.student?.class?.class_code || "",
+                currentStatus === "present" ? "Có mặt" : currentStatus === "late" ? "Đi muộn" : currentStatus === "excused" ? "Có phép" : "Vắng mặt",
+                r.attendance_time ? formatDateTime(r.attendance_time) : "",
+                r.note || "",
+            ]);
+        });
+
+        const ws = XLSX.utils.aoa_to_sheet(aoaData);
+        
+        // Merge cell cho tiêu đề
+        ws["!merges"] = [
+            { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }, // THÔNG TIN CA THI
+            { s: { r: 6, c: 0 }, e: { r: 6, c: 6 } }  // THỐNG KÊ ĐIỂM DANH
+        ];
+
+        // Căn chỉnh độ rộng cột
+        ws['!cols'] = [{ wch: 15 }, { wch: 25 }, { wch: 30 }, { wch: 15 }, { wch: 30 }, { wch: 25 }, { wch: 20 }];
+
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "DanhSachDiemDanh");
-        
-        // Căn chỉnh độ rộng cột
-        ws['!cols'] = [
-            { wch: 5 },  // STT
-            { wch: 15 }, // Mã SV
-            { wch: 30 }, // Họ tên
-            { wch: 15 }, // Lớp
-            { wch: 20 }, // Trạng thái
-            { wch: 25 }  // Thời gian
-        ];
 
         XLSX.writeFile(wb, `DiemDanh_${schedule.subject?.subject_code || "CaThi"}_Nhom${schedule.group || ""}.xlsx`);
     };
@@ -242,10 +308,11 @@ export function ExamDetailView({ schedule, onBack, hideAttendanceButton }: Props
             label: (
                 <div 
                     className="flex items-center gap-1 cursor-pointer hover:text-slate-600 transition-colors"
-                    onClick={() => setNameSortDir(prev => prev === 'asc' ? 'desc' : 'asc')}
+                    onClick={() => setNameSortDir(prev => prev === 'none' ? 'asc' : prev === 'asc' ? 'desc' : 'none')}
                 >
                     Họ tên
-                    <i className={`ti ti-sort-${nameSortDir === 'asc' ? 'ascending' : 'descending'} text-slate-400`} />
+                    {nameSortDir !== 'none' && <i className={`ti ti-sort-${nameSortDir === 'asc' ? 'ascending' : 'descending'} text-slate-400`} />}
+                    {nameSortDir === 'none' && <i className={`ti ti-arrows-sort text-slate-300`} />}
                 </div>
             ),
             render: (r) => <span className="text-slate-700">{`${r.student?.last_name || ''} ${r.student?.first_name || ''}`}</span>,
