@@ -23,6 +23,9 @@ export default function ExamScheduleManagementPage() {
     const [modalOpen, setModalOpen] = useState(false);
     const [importModalOpen, setImportModalOpen] = useState(false);
     const [periodManagerOpen, setPeriodManagerOpen] = useState(false);
+    const [exportModalOpen, setExportModalOpen] = useState(false);
+    const [exportSelectedPeriodId, setExportSelectedPeriodId] = useState("");
+    const [isExporting, setIsExporting] = useState(false);
     const [attendanceRecordModal, setAttendanceRecordModal] = useState<ExamSchedule | null>(null);
     const [examSupervisorModal, setExamSupervisorModal] = useState<ExamSchedule | null>(null);
     const [editingExamSchedule, setEditingExamSchedule] = useState<ExamSchedule | null>(null);
@@ -111,12 +114,17 @@ export default function ExamScheduleManagementPage() {
     const selectedPeriod = examPeriods.find((p) => p.id === selectedPeriodId);
 
     const handleExportPeriod = async () => {
-        if (!selectedPeriodId) return;
-        const toastId = toast.loading("Đang tải dữ liệu ca thi...");
+        if (!exportSelectedPeriodId) {
+            toast.error("Vui lòng chọn đợt thi");
+            return;
+        }
+        setIsExporting(true);
+        const periodToExport = examPeriods.find((p) => p.id === exportSelectedPeriodId);
+        const toastId = toast.loading("Đang tổng hợp dữ liệu ca thi, vui lòng đợi...");
         try {
             const resSchedules = await api.get("/exam-schedules", {
                 params: {
-                    exam_period_id: selectedPeriodId,
+                    exam_period_id: exportSelectedPeriodId,
                     limit: 1000,
                 },
             });
@@ -159,11 +167,15 @@ export default function ExamScheduleManagementPage() {
                 XLSX.utils.book_append_sheet(wb, ws, finalSheetName);
             }
 
-            XLSX.writeFile(wb, `CaThi_${selectedPeriod?.name || "DotThi"}.xlsx`);
-            toast.success("Xuất dữ liệu thành công", { id: toastId });
+            XLSX.writeFile(wb, `CaThi_${periodToExport?.name || "DotThi"}.xlsx`);
+            toast.success("Xuất dữ liệu thành công", { id: toastId, duration: 5000 });
+            setExportModalOpen(false);
+            setExportSelectedPeriodId("");
         } catch (err) {
             console.error(err);
-            toast.error("Lỗi khi xuất dữ liệu", { id: toastId });
+            toast.error("Lỗi khi xuất dữ liệu", { id: toastId, duration: 5000 });
+        } finally {
+            setIsExporting(false);
         }
     };
 
@@ -176,9 +188,7 @@ export default function ExamScheduleManagementPage() {
                     <p className="text-sm text-slate-500 mt-0.5">Tổng quan và quản lý lịch thi trong hệ thống</p>
                 </div>
                 <div className="flex gap-2">
-                    {selectedPeriodId && (
-                        <Button variant="secondary" leftIcon="file-spreadsheet" onClick={handleExportPeriod} className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300">Xuất Excel Đợt thi</Button>
-                    )}
+                    <Button variant="secondary" leftIcon="file-spreadsheet" onClick={() => setExportModalOpen(true)} className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300">Xuất Excel</Button>
                     <Button variant="secondary" leftIcon="calendar-event" onClick={() => setPeriodManagerOpen(true)}>Đợt thi</Button>
                     <Button variant="secondary" leftIcon="upload" onClick={() => setImportModalOpen(true)}>Import Excel</Button>
                     <Button variant="primary" leftIcon="plus" onClick={() => handleOpenModal()}>Thêm lịch thi</Button>
@@ -308,6 +318,38 @@ export default function ExamScheduleManagementPage() {
                 onClose={() => setPeriodManagerOpen(false)}
                 onSuccess={fetchPeriods}
             />
+            <Modal
+                open={exportModalOpen}
+                onClose={() => setExportModalOpen(false)}
+                title="Chọn đợt thi để xuất Excel"
+                size="sm"
+                footer={
+                    <>
+                        <Button variant="secondary" onClick={() => setExportModalOpen(false)} disabled={isExporting}>Hủy</Button>
+                        <Button variant="primary" onClick={handleExportPeriod} disabled={!exportSelectedPeriodId || isExporting} loading={isExporting}>Xuất dữ liệu</Button>
+                    </>
+                }
+            >
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Đợt thi <span className="text-red-500">*</span></label>
+                        <select
+                            value={exportSelectedPeriodId}
+                            onChange={(e) => setExportSelectedPeriodId(e.target.value)}
+                            disabled={isExporting}
+                            className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60 disabled:bg-slate-100"
+                        >
+                            <option value="" disabled>-- Chọn đợt thi --</option>
+                            {examPeriods.map((p) => (
+                                <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                        Hệ thống sẽ tổng hợp toàn bộ ca thi của đợt thi được chọn và xuất ra một file Excel, mỗi ca thi là một Sheet.
+                    </p>
+                </div>
+            </Modal>
             <Modal
                 open={!!scheduleToDelete}
                 onClose={() => setScheduleToDelete(null)}
