@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import api from "@/lib/api";
-import { todayString, formatDateVN, addDays } from "@/lib/utils";
+import { todayString, formatDateVN, addDays, formatTime } from "@/lib/utils";
 import { ExamPeriod, ExamSchedule } from "@/types";
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
@@ -142,18 +142,39 @@ export default function ExamScheduleManagementPage() {
                 });
                 const records = resRecords.data?.data as any[] || [];
 
-                const data = records.map((r, index) => ({
-                    "STT": index + 1,
-                    "Mã SV": r.student?.student_code || "",
-                    "Họ tên": `${r.student?.last_name || ""} ${r.student?.first_name || ""}`.trim(),
-                    "Lớp": r.student?.class?.name || r.student?.class?.class_code || "",
-                    "Trạng thái": r.status === "present" ? "Có mặt" : r.status === "late" ? "Đi muộn" : r.status === "excused" ? "Có phép" : (r.attendance_time ? "Có mặt" : "Vắng mặt"),
-                    "Thời gian điểm danh": r.attendance_time ? formatDateTime(r.attendance_time) : "",
-                    "Ghi chú": r.note || "",
-                }));
+                const aoaData: any[][] = [];
+                // Thông tin ca thi ở đầu sheet
+                aoaData.push(["THÔNG TIN CA THI"]);
+                aoaData.push(["Môn thi:", sch.subject?.name || "", "", "Mã môn:", sch.subject?.subject_code || ""]);
+                aoaData.push(["Phòng thi:", sch.room?.name || sch.room?.room_code || "", "", "Ngày thi:", sch.start_time ? formatDateVN(sch.start_time) : ""]);
+                aoaData.push(["Giờ bắt đầu:", sch.start_time ? formatTime(sch.start_time) : "", "", "Thời lượng:", `${sch.duration || 120} phút`]);
+                aoaData.push(["Nhóm/Ca thi:", sch.group || "", "", "Giám thị:", (sch.supervisors || []).join(", ") || "Chưa phân công"]);
+                aoaData.push([]); // Dòng trống
 
-                const ws = XLSX.utils.json_to_sheet(data);
-                ws['!cols'] = [{ wch: 5 }, { wch: 15 }, { wch: 30 }, { wch: 15 }, { wch: 15 }, { wch: 25 }, { wch: 20 }];
+                // Tiêu đề bảng điểm danh
+                aoaData.push(["STT", "Mã SV", "Họ tên", "Lớp", "Trạng thái", "Thời gian điểm danh", "Ghi chú"]);
+
+                // Dữ liệu điểm danh
+                records.forEach((r, index) => {
+                    aoaData.push([
+                        index + 1,
+                        r.student?.student_code || "",
+                        `${r.student?.last_name || ""} ${r.student?.first_name || ""}`.trim(),
+                        r.student?.class?.name || r.student?.class?.class_code || "",
+                        r.status === "present" ? "Có mặt" : r.status === "late" ? "Đi muộn" : r.status === "excused" ? "Có phép" : (r.attendance_time ? "Có mặt" : "Vắng mặt"),
+                        r.attendance_time ? formatDateTime(r.attendance_time) : "",
+                        r.note || "",
+                    ]);
+                });
+
+                const ws = XLSX.utils.aoa_to_sheet(aoaData);
+                
+                // Merge cell cho tiêu đề "THÔNG TIN CA THI"
+                ws["!merges"] = [
+                    { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }
+                ];
+
+                ws['!cols'] = [{ wch: 15 }, { wch: 25 }, { wch: 30 }, { wch: 15 }, { wch: 30 }, { wch: 25 }, { wch: 20 }];
 
                 let sheetName = `${sch.subject?.subject_code || "M"}_P${sch.room?.room_code || "X"}_Ca${sch.group || 1}`;
                 if (sheetName.length > 31) sheetName = sheetName.substring(0, 31);
