@@ -95,8 +95,10 @@ export function todayString(): string {
 /** Format ngày theo kiểu VN dài (VD: "thứ ba, 24/06/2026") */
 export function formatDateVN(dateStr: string): string {
   if (!dateStr) return '';
-  const d = new Date(dateStr + 'T00:00:00');
-  return d.toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
+  const map = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
+  const day = dayjs(dateStr);
+  if (!day.isValid()) return "";
+  return `${map[day.day()]}, ${day.format('DD/MM/YYYY')}`;
 }
 
 /** Cộng/trừ ngày từ chuỗi yyyy-MM-dd, trả về yyyy-MM-dd */

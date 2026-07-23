@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import api from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import toast from "react-hot-toast";
+import * as XLSX from "xlsx";
 import { IconCamera, IconCheck, IconX, IconTrash, IconAlertTriangle } from "@tabler/icons-react";
 
 interface ImageItem {
@@ -138,25 +139,24 @@ export default function FaceRegistrationPage() {
             const successfulUploads = uploadResults.filter((r) => r.s3Ok);
             const failedBeforeConfirm = uploadResults.filter((r) => !r.s3Ok);
 
-            if (successfulUploads.length === 0) {
-                throw new Error("Tất cả ảnh đều thất bại khi đẩy lên hệ thống lưu trữ. Vui lòng thử lại.");
-            }
-
             // [BƯỚC 3]: Gọi backend confirm các file đã upload S3 thành công
-            const confirmPayload = successfulUploads.map((r) => {
-                if (activeTab === "student") {
-                    return { fileName: r.img.file.name, student_code: r.img.user_code };
-                } else {
-                    return { fileName: r.img.file.name, lecturer_code: r.img.user_code };
-                }
-            });
+            let results: { success: boolean; fileName: string; student_code: string; message: string }[] = [];
 
-            const confirmRes = await api.post(`/${activeTab === 'student' ? 'student' : 'lecturer'}-photos/confirm-uploads`, {
-                uploads: confirmPayload,
-            });
+            if (successfulUploads.length > 0) {
+                const confirmPayload = successfulUploads.map((r) => {
+                    if (activeTab === "student") {
+                        return { fileName: r.img.file.name, student_code: r.img.user_code };
+                    } else {
+                        return { fileName: r.img.file.name, lecturer_code: r.img.user_code };
+                    }
+                });
 
-            const results: { success: boolean; fileName: string; student_code: string; message: string }[] =
-                confirmRes.data?.data || confirmRes.data;
+                const confirmRes = await api.post(`/${activeTab === 'student' ? 'student' : 'lecturer'}-photos/confirm-uploads`, {
+                    uploads: confirmPayload,
+                });
+
+                results = confirmRes.data?.data || confirmRes.data;
+            }
 
             // [BƯỚC 4]: Gộp kết quả lỗi từ bước S3 + bước confirm
             const allFailures: { name: string; reason: string }[] = [];
@@ -186,23 +186,41 @@ export default function FaceRegistrationPage() {
             if (allFailures.length === 0) {
                 toast.success(`Đã lưu thành công toàn bộ ${successCount} ảnh!`);
                 handleClearAll();
-            } else if (successCount > 0) {
-                toast(
-                    (t) => (
-                        <div className="text-sm">
-                            <p className="font-semibold text-green-600 mb-1">✅ {successCount} ảnh lưu thành công</p>
-                            <p className="font-semibold text-rose-600 mb-2">❌ {allFailures.length} ảnh thất bại:</p>
-                            <div className="max-h-32 overflow-y-auto pr-1 space-y-1">
-                                {allFailures.map((err, i) => (
-                                    <div key={i} className="bg-rose-50 border border-rose-100 rounded px-2 py-1.5 text-xs text-rose-700">
-                                        <span className="font-semibold">{err.name}:</span> {err.reason}
-                                    </div>
-                                ))}
+            } else if (allFailures.length <= 5) {
+                if (successCount > 0) {
+                    toast(
+                        (t) => (
+                            <div className="text-sm">
+                                <p className="font-semibold text-green-600 mb-1">✅ {successCount} ảnh lưu thành công</p>
+                                <p className="font-semibold text-rose-600 mb-2">❌ {allFailures.length} ảnh thất bại:</p>
+                                <div className="max-h-32 overflow-y-auto pr-1 space-y-1">
+                                    {allFailures.map((err, i) => (
+                                        <div key={i} className="bg-rose-50 border border-rose-100 rounded px-2 py-1.5 text-xs text-rose-700">
+                                            <span className="font-semibold">{err.name}:</span> {err.reason}
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
-                    ),
-                    { duration: 8000 }
-                );
+                        ),
+                        { duration: 8000 }
+                    );
+                } else {
+                    toast.error(
+                        (t) => (
+                            <div className="text-sm">
+                                <p className="font-semibold text-rose-600 mb-2">Lưu thất bại toàn bộ:</p>
+                                <div className="max-h-40 overflow-y-auto pr-1 space-y-1">
+                                    {allFailures.map((err, i) => (
+                                        <div key={i} className="bg-rose-50 border border-rose-100 rounded px-2 py-1.5 text-xs text-rose-700">
+                                            <span className="font-semibold">{err.name}:</span> {err.reason}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ),
+                        { duration: 8000 }
+                    );
+                }
 
                 const successFileNames = new Set(
                     Array.isArray(results)
@@ -211,21 +229,36 @@ export default function FaceRegistrationPage() {
                 );
                 setImages((prev) => prev.filter((img) => !successFileNames.has(img.file.name)));
             } else {
-                toast.error(
-                    (t) => (
-                        <div className="text-sm">
-                            <p className="font-semibold text-rose-600 mb-2">Lưu thất bại toàn bộ:</p>
-                            <div className="max-h-40 overflow-y-auto pr-1 space-y-1">
-                                {allFailures.map((err, i) => (
-                                    <div key={i} className="bg-rose-50 border border-rose-100 rounded px-2 py-1.5 text-xs text-rose-700">
-                                        <span className="font-semibold">{err.name}:</span> {err.reason}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    ),
-                    { duration: 8000 }
+                // > 5 errors -> Export excel
+                if (successCount > 0) {
+                    toast.success(`Đã lưu thành công ${successCount} ảnh. Có ${allFailures.length} ảnh bị lỗi.`);
+                } else {
+                    toast.error(`Lưu thất bại toàn bộ ${allFailures.length} ảnh.`);
+                }
+                
+                setTimeout(() => {
+                    if (window.confirm(`Có ${allFailures.length} ảnh bị lỗi. Bạn có muốn tải xuống file Excel chứa chi tiết lỗi không?`)) {
+                        try {
+                            const data = [["Tên File/Mã", "Lỗi chi tiết"]];
+                            allFailures.forEach((f) => {
+                                data.push([f.name, f.reason]);
+                            });
+                            const newWorksheet = XLSX.utils.aoa_to_sheet(data);
+                            const newWorkbook = XLSX.utils.book_new();
+                            XLSX.utils.book_append_sheet(newWorkbook, newWorksheet, "Errors");
+                            XLSX.writeFile(newWorkbook, `Danh_sach_loi_anh_${new Date().getTime()}.xlsx`);
+                        } catch (e) {
+                            console.error("Lỗi tạo file excel:", e);
+                        }
+                    }
+                }, 100);
+                
+                const successFileNames = new Set(
+                    Array.isArray(results)
+                        ? results.filter((r) => r.success).map((r) => r.fileName)
+                        : successfulUploads.map((r) => r.img.file.name)
                 );
+                setImages((prev) => prev.filter((img) => !successFileNames.has(img.file.name)));
             }
         } catch (err: any) {
             const msg = err.response?.data?.message || err.message;

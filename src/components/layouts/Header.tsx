@@ -9,21 +9,12 @@ interface HeaderProps {
 /** Map prefix → tiêu đề trang hiển thị trên Header */
 const PAGE_TITLES: Record<string, string> = {
   '/admin/users':       'Quản lý người dùng',
-  '/admin/courses':     'Quản lý khóa học',
   '/admin/attendance':  'Điểm danh',
-  '/admin/reports':     'Báo cáo',
-  '/admin/settings':    'Cài đặt',
   '/admin':             'Tổng quan',
-  '/lecturer/courses':  'Khóa học của tôi',
-  '/lecturer/grades':   'Nhập điểm',
   '/lecturer/schedule': 'Lịch dạy',
   '/lecturer/attendance': 'Điểm danh',
-  '/lecturer':          'Tổng quan',
   '/student/grades':    'Kết quả học tập',
   '/student/attendance':'Điểm danh',
-  '/student/schedule':  'Thời khóa biểu',
-  '/student/materials': 'Tài liệu',
-  '/student':           'Tổng quan',
 };
 
 function resolveTitle(pathname: string): string {
