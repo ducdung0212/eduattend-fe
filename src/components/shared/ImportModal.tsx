@@ -126,6 +126,7 @@ export function ImportModal({
                 timeout: 300000 // 5 phút để import file lớn
             });
             
+            const rawErrors = res.data?.data?.rawErrors || res.data?.rawErrors;
             if (rawErrors && rawErrors.length > 0) {
                 toast.error(res.data?.message || "Import hoàn tất với một số lỗi");
                 setTimeout(async () => {
