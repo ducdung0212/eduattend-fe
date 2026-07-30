@@ -33,6 +33,7 @@ export function LecturerFormModal({ open, lecturer, onClose, onSuccess }: Lectur
 
     const [photoFile, setPhotoFile] = useState<File | null>(null);
     const [photoPreview, setPhotoPreview] = useState<string>("");
+    const [photoDeleted, setPhotoDeleted] = useState(false);
     const photoInputRef = useRef<HTMLInputElement>(null);
     
     const [submitting, setSubmitting] = useState(false);
@@ -73,6 +74,7 @@ export function LecturerFormModal({ open, lecturer, onClose, onSuccess }: Lectur
                 setSearchTerm(lecturer.user?.email || "");
                 setPhotoPreview((lecturer as any).photos?.[0]?.image_url || "");
                 setPhotoFile(null);
+                setPhotoDeleted(false);
                 setFullName(`${lecturer.last_name} ${lecturer.first_name}`.trim());
             } else {
                 setFormData({
@@ -89,6 +91,7 @@ export function LecturerFormModal({ open, lecturer, onClose, onSuccess }: Lectur
                 setFullName("");
                 setPhotoPreview("");
                 setPhotoFile(null);
+                setPhotoDeleted(false);
             }
             setSearchedUsers([]);
             setShowDropdown(false);
@@ -152,10 +155,21 @@ export function LecturerFormModal({ open, lecturer, onClose, onSuccess }: Lectur
         }
     };
 
-    const handleRemovePhoto = () => {
+    const handleRemovePhoto = async () => {
         setPhotoFile(null);
         setPhotoPreview("");
+        setPhotoDeleted(true);
         if (photoInputRef.current) photoInputRef.current.value = "";
+
+        // Nếu đang sửa và giảng viên đã có ảnh → gọi API xóa ngay
+        if (lecturer) {
+            try {
+                await api.delete(`/lecturer-photos/${lecturer.lecturer_code}`);
+            } catch (err: any) {
+                const msg = err.response?.data?.message || err.message;
+                toast.error(`Lỗi khi xóa ảnh: ${msg}`);
+            }
+        }
     };
 
     const uploadPhoto = async (lecturerCode: string) => {

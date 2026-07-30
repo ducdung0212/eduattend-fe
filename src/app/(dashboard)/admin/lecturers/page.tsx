@@ -28,9 +28,10 @@ export default function LecturerManagementPage() {
     const [meta, setMeta] = useState<PaginationMeta | null>(null);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
+    const [isHasPhoto, setIsHasPhoto] = useState<string>("");
 
     const [faculties, setFaculties] = useState<Faculty[]>([]);
-    const [facultyCode,setFacultyCode]=useState("");
+    const [facultyCode, setFacultyCode] = useState("");
 
     const { page, setPage, reset: resetPage } = usePagination(meta?.totalPages ?? 1);
 
@@ -42,7 +43,8 @@ export default function LecturerManagementPage() {
                     page,
                     limit: LIMIT,
                     search: search || undefined,
-                    faculty_code:facultyCode||undefined
+                    faculty_code: facultyCode || undefined,
+                    is_has_photo: isHasPhoto || undefined,
                 }
             });
             setLecturers(res.data?.data ?? []);
@@ -53,7 +55,7 @@ export default function LecturerManagementPage() {
         } finally {
             setLoading(false);
         }
-    }, [page, search, facultyCode])
+    }, [page, search, facultyCode, isHasPhoto])
 
     useEffect(() => {
         const fetchFaculties = async () => {
@@ -86,9 +88,14 @@ export default function LecturerManagementPage() {
         resetPage();
     }
 
-    const handleFacultyChange=(e:React.ChangeEvent<HTMLSelectElement>)=>{
+    const handleFacultyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         setFacultyCode(e.target.value);
-        resetPage()
+        resetPage();
+    }
+
+    const handlePhotoFilterChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        setIsHasPhoto(e.target.value);
+        resetPage();
     }
 
     const confirmDelete = async () => {
@@ -218,7 +225,7 @@ export default function LecturerManagementPage() {
             </div>
 
             <div className="bg-white border border-slate-200/70 rounded-xl overflow-hidden">
-                <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 flex-wrap">
+                <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 flex-wrap bg-slate-50/50">
                     <SearchBar
                         value={search}
                         onChange={handleSearch}
@@ -237,6 +244,17 @@ export default function LecturerManagementPage() {
                                 {f.name}
                             </option>
                         ))}
+                    </select>
+
+                    {/* Filter Hình ảnh */}
+                    <select
+                        value={isHasPhoto}
+                        onChange={handlePhotoFilterChange}
+                        className="h-9 px-3 text-sm text-slate-900 rounded-lg border border-slate-200 bg-white outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 min-w-[150px]"
+                    >
+                        <option value="">-- Trạng thái ảnh --</option>
+                        <option value="true">Đã có ảnh</option>
+                        <option value="false">Chưa có ảnh</option>
                     </select>
                 </div>
                 <DataTable<any>

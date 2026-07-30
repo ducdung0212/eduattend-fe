@@ -33,6 +33,7 @@ export function StudentFormModal({ open, student, onClose, onSuccess }: StudentF
 
     const [photoFile, setPhotoFile] = useState<File | null>(null);
     const [photoPreview, setPhotoPreview] = useState<string>("");
+    const [photoDeleted, setPhotoDeleted] = useState(false);
     const photoInputRef = useRef<HTMLInputElement>(null);
 
     const [submitting, setSubmitting] = useState(false);
@@ -84,6 +85,7 @@ export function StudentFormModal({ open, student, onClose, onSuccess }: StudentF
                 setSearchTerm(student.user?.email || "");
                 setPhotoPreview(student.photos?.[0]?.image_url || "");
                 setPhotoFile(null);
+                setPhotoDeleted(false);
                 setFullName(`${student.last_name} ${student.first_name}`.trim());
             } else {
                 setFormData({
@@ -102,6 +104,7 @@ export function StudentFormModal({ open, student, onClose, onSuccess }: StudentF
                 setClassSearch("");
                 setPhotoPreview("");
                 setPhotoFile(null);
+                setPhotoDeleted(false);
             }
             setSearchedUsers([]);
             setShowDropdown(false);
@@ -186,10 +189,21 @@ export function StudentFormModal({ open, student, onClose, onSuccess }: StudentF
         }
     };
 
-    const handleRemovePhoto = () => {
+    const handleRemovePhoto = async () => {
         setPhotoFile(null);
         setPhotoPreview("");
+        setPhotoDeleted(true);
         if (photoInputRef.current) photoInputRef.current.value = "";
+
+        // Nếu đang sửa và sinh viên đã có ảnh → gọi API xóa ngay
+        if (student) {
+            try {
+                await api.delete(`/student-photos/${student.student_code}`);
+            } catch (err: any) {
+                const msg = err.response?.data?.message || err.message;
+                toast.error(`Lỗi khi xóa ảnh: ${msg}`);
+            }
+        }
     };
 
     const uploadPhoto = async (studentCode: string) => {
