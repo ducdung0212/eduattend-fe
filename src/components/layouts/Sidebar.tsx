@@ -1,12 +1,12 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { MenuItem, User } from '@/types';
 import { cn, getInitials } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
-// Import thêm IconChevronLeft
-import { IconChevronRight, IconChevronLeft, IconLogout } from '@tabler/icons-react';
+// Import thêm icon
+import { IconChevronRight, IconChevronLeft, IconLogout, IconSettings, IconKey } from '@tabler/icons-react';
 
 interface SidebarProps {
   menuItems: MenuItem[];
@@ -32,6 +32,23 @@ export function Sidebar({ menuItems, user }: SidebarProps) {
   
   // State quản lý việc đóng/mở sidebar
   const [isCollapsed, setIsCollapsed] = useState(false);
+
+  // Dropdown cho nút Settings
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Đóng dropdown khi click ra ngoài
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   function toggleGroup(href: string) {
     // Tự động mở rộng sidebar nếu đang đóng mà người dùng click vào một nhóm menu
@@ -152,7 +169,7 @@ export function Sidebar({ menuItems, user }: SidebarProps) {
       </nav>
 
       {/* User card */}
-      <div className={cn("pb-4 border-t border-slate-100 pt-3 transition-all overflow-hidden", isCollapsed ? "px-0 opacity-0 pointer-events-none" : "px-3 opacity-100")}>
+      <div className={cn("pb-4 border-t border-slate-100 pt-3 transition-all", isCollapsed ? "px-0 opacity-0 pointer-events-none overflow-hidden" : "px-3 opacity-100")}>
         <div 
           className={cn(
             'flex rounded-lg transition-all',
@@ -174,14 +191,41 @@ export function Sidebar({ menuItems, user }: SidebarProps) {
               <p className="text-xs text-slate-400">{ROLE_LABEL[user.role]}</p>
             </div>
           )}
-          <button
-            onClick={logout}
-            title={isCollapsed ? "Đăng xuất" : undefined}
-            className="text-slate-400 hover:text-red-500 transition-colors flex-shrink-0"
-            aria-label="Đăng xuất"
-          >
-            <IconLogout className="w-5 h-5" aria-hidden="true" />
-          </button>
+          
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              title={isCollapsed ? "Cài đặt" : undefined}
+              className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors flex-shrink-0"
+              aria-label="Cài đặt"
+            >
+              <IconSettings className="w-5 h-5" aria-hidden="true" />
+            </button>
+
+            {/* Dropdown Menu */}
+            {isDropdownOpen && (
+              <div className="absolute bottom-full right-0 mb-2 w-48 bg-white border border-slate-200 rounded-lg shadow-lg py-1 z-50 overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200">
+                <Link
+                  href="/change-password"
+                  onClick={() => setIsDropdownOpen(false)}
+                  className="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors w-full text-left"
+                >
+                  <IconKey className="w-4 h-4 text-slate-400" />
+                  Đổi mật khẩu
+                </Link>
+                <button
+                  onClick={() => {
+                    setIsDropdownOpen(false);
+                    logout();
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors w-full text-left"
+                >
+                  <IconLogout className="w-4 h-4 text-red-400" />
+                  Đăng xuất
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </aside>

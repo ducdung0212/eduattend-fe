@@ -114,12 +114,6 @@ function ContextMenu({
             className: "text-slate-700 hover:bg-slate-50",
         },
         {
-            label: "Xóa ca thi",
-            icon: <i className="ti ti-trash text-sm" />,
-            onClick: () => { onDelete?.(schedule); onClose(); },
-            className: "text-red-600 hover:bg-red-50",
-        },
-        {
             label: "Danh sách thí sinh",
             icon: <i className="ti ti-users text-sm" />,
             onClick: () => { onManageStudents?.(schedule); onClose(); },
@@ -130,6 +124,12 @@ function ContextMenu({
             icon: <i className="ti ti-user-check text-sm" />,
             onClick: () => { onManageSupervisors?.(schedule); onClose(); },
             className: "text-slate-700 hover:bg-slate-50",
+        },
+        {
+            label: "Xóa ca thi",
+            icon: <i className="ti ti-trash text-sm" />,
+            onClick: () => { onDelete?.(schedule); onClose(); },
+            className: "text-red-600 hover:bg-red-50",
         },
     ];
 
@@ -182,12 +182,12 @@ function ExamCard({
         <div
             onClick={onClick}
             className="flex flex-col gap-1 h-full rounded-[10px] px-3 py-2.5 relative transition-all duration-150 shadow-sm cursor-pointer hover:shadow-md hover:-translate-y-0.5"
-            style={{ background: color.bg, borderLeft: `3.5px solid ${color.border}` }}
+            style={{ background: color.bg }}
         >
             {/* Thời gian */}
             <div className="flex items-center gap-1 text-[11.5px] font-medium text-slate-500 tabular-nums">
                 <i className="ti ti-clock text-[11px] text-slate-400 shrink-0" />
-                {startStr} – {endStr}
+                {startStr} - {endStr}
                 <span className="ml-auto text-[10px] bg-black/5 rounded px-1 py-px text-slate-400">
                     {schedule.duration} phút
                 </span>

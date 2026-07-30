@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useState, Fragment } from 'react';
 import { cn } from '@/lib/utils';
 
 export interface Column<T> {
@@ -16,6 +16,8 @@ interface DataTableProps<T> {
   rowKey: (row: T) => string;
   skeletonRows?: number;
   emptyText?: string;
+  expandable?: boolean;
+  expandedRowRender?: (row: T) => ReactNode;
 }
 
 function SkeletonRow({ cols }: { cols: number }) {
@@ -37,8 +39,19 @@ export function DataTable<T>({
   rowKey,
   skeletonRows = 8,
   emptyText = 'Không có dữ liệu.',
+  expandable,
+  expandedRowRender,
 }: DataTableProps<T>) {
   const ALIGN = { left: 'text-left', right: 'text-right', center: 'text-center' };
+  
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
+
+  const toggleRow = (key: string) => {
+    const next = new Set(expandedKeys);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    setExpandedKeys(next);
+  };
 
   return (
     <div className="overflow-x-auto">
@@ -71,21 +84,38 @@ export function DataTable<T>({
               </td>
             </tr>
           ) : (
-            data.map((row, index) => (
-              <tr
-                key={rowKey(row)}
-                className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60 transition-colors"
-              >
-                {columns.map((col) => (
-                  <td
-                    key={col.key}
-                    className={cn('px-4 py-3.5 text-slate-700', ALIGN[col.align ?? 'left'], col.className)}
+            data.map((row, index) => {
+              const key = rowKey(row);
+              const isExpanded = expandedKeys.has(key);
+              
+              return (
+                <Fragment key={key}>
+                  <tr
+                    onClick={() => expandable && toggleRow(key)}
+                    className={cn(
+                      "border-b border-slate-100 last:border-0 hover:bg-slate-50/60 transition-colors",
+                      expandable && "cursor-pointer"
+                    )}
                   >
-                    {col.render ? col.render(row, index) : String((row as Record<string, unknown>)[col.key] ?? '—')}
-                  </td>
-                ))}
-              </tr>
-            ))
+                    {columns.map((col) => (
+                      <td
+                        key={col.key}
+                        className={cn('px-4 py-3.5 text-slate-700', ALIGN[col.align ?? 'left'], col.className)}
+                      >
+                        {col.render ? col.render(row, index) : String((row as Record<string, unknown>)[col.key] ?? '—')}
+                      </td>
+                    ))}
+                  </tr>
+                  {isExpanded && expandedRowRender && (
+                    <tr className="bg-slate-50/30 border-b border-slate-100 last:border-0">
+                      <td colSpan={columns.length} className="p-0">
+                        {expandedRowRender(row)}
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })
           )}
         </tbody>
       </table>

@@ -8,6 +8,7 @@ import { ExamPeriod, ExamSchedule } from "@/types";
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { ExamScheduleFormModal } from "./_components/ExamScheduleFormModal";
+import { DatePickerWithHighlight } from "./_components/DatePickerWithHighlight";
 import { ExamScheduleImportModal } from "./_components/ExamScheduleImportModal";
 import { ExamSupervisorModal } from "./_components/ExamSupervisorModal";
 import { AttendanceRecordModal } from "./_components/AttendanceRecordModal";
@@ -43,6 +44,8 @@ export default function ExamScheduleManagementPage() {
     // --- Đợt thi filter ---
     const [examPeriods, setExamPeriods] = useState<ExamPeriod[]>([]);
     const [selectedPeriodId, setSelectedPeriodId] = useState<string>("");
+    const [periodHighlightedDates, setPeriodHighlightedDates] = useState<string[]>([]);
+    const [isDateResolved, setIsDateResolved] = useState(false);
 
     // Fetch đợt thi
     const fetchPeriods = useCallback(async () => {
@@ -58,8 +61,48 @@ export default function ExamScheduleManagementPage() {
         fetchPeriods();
     }, [fetchPeriods]);
 
+    useEffect(() => {
+        setIsDateResolved(false);
+        // Fetch tất cả lịch thi (hoặc theo đợt) để lấy các ngày có ca thi
+        api.get("/exam-schedules", {
+            params: {
+                exam_period_id: selectedPeriodId || undefined,
+                limit: 1000,
+            },
+        })
+        .then((res) => {
+            const schedules = res.data?.data || [];
+            // Lọc các ngày và sort giảm dần để lấy ngày mới nhất
+            const dates = Array.from(
+                new Set(
+                    schedules
+                        .filter((s: ExamSchedule) => s.start_time)
+                        .map((s: ExamSchedule) => toYMD(s.start_time))
+                )
+            ).sort((a, b) => (b as string).localeCompare(a as string)) as string[];
+            
+            setPeriodHighlightedDates(dates);
+
+            // Tự động chuyển sang ngày có ca thi mới nhất
+            if (dates.length > 0) {
+                setGridDate(dates[0]);
+            } else if (selectedPeriodId) {
+                // Nếu đợt thi rỗng, về ngày bắt đầu đợt thi
+                const p = examPeriods.find(x => x.id === selectedPeriodId);
+                if (p && p.start_date) setGridDate(toYMD(p.start_date));
+            } else {
+                // Nếu 'Tất cả' rỗng, về hôm nay
+                setGridDate(todayString());
+            }
+        })
+        .catch((e) => console.error("Lỗi lấy danh sách ngày có ca thi", e))
+        .finally(() => setIsDateResolved(true));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedPeriodId]);
+
     // Fetch danh sách lịch thi
     const fetchExamSchedules = useCallback(async () => {
+        if (!isDateResolved) return;
         setLoading(true);
         try {
             const res = await api.get("/exam-schedules", {
@@ -77,7 +120,7 @@ export default function ExamScheduleManagementPage() {
         } finally {
             setLoading(false);
         }
-    }, [gridDate, selectedPeriodId]);
+    }, [gridDate, selectedPeriodId, isDateResolved]);
 
     useEffect(() => {
         fetchExamSchedules();
@@ -113,6 +156,13 @@ export default function ExamScheduleManagementPage() {
     // Tìm đợt thi đang chọn (để hiển thị khoảng ngày)
     const selectedPeriod = examPeriods.find((p) => p.id === selectedPeriodId);
 
+    // Các ngày có ca thi (dùng để highlight trong date picker)
+    const highlightedDates = periodHighlightedDates;
+
+    // Kiểm tra giới hạn nút ‹ / › ngày
+    const canGoPrevDay = !selectedPeriod || gridDate > toYMD(selectedPeriod.start_date);
+    const canGoNextDay = !selectedPeriod || gridDate < toYMD(selectedPeriod.end_date);
+
     const handleExportPeriod = async () => {
         if (!exportSelectedPeriodId) {
             toast.error("Vui lòng chọn đợt thi");
@@ -138,7 +188,7 @@ export default function ExamScheduleManagementPage() {
 
             for (const sch of schedules) {
                 const resRecords = await api.get("/attendance-records", {
-                    params: { exam_schedule_id: sch.id, limit: 1000 },
+                    params: { exam_schedule_id: sch.id, limit: 100 },
                 });
                 const rawRecords = resRecords.data?.data as any[] || [];
                 
@@ -261,11 +311,11 @@ export default function ExamScheduleManagementPage() {
                 </div>
             </div>
 
-            <div className="bg-white border border-slate-200/70 rounded-xl overflow-hidden">
+            <div className="bg-white border border-slate-200/70 rounded-xl">
                 {viewState.view === "list" ? (
                     <>
                         {/* Toolbar — Bộ lọc */}
-                        <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 flex-wrap bg-slate-50/50">
+                        <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 flex-wrap bg-slate-50/50 rounded-t-xl">
                             {/* Lọc theo đợt thi */}
                             <div className="flex items-center gap-2">
                                 <label className="text-xs font-medium text-slate-500 whitespace-nowrap">Đợt thi:</label>
@@ -287,8 +337,12 @@ export default function ExamScheduleManagementPage() {
                             {/* Lọc theo ngày */}
                             <div className="flex items-center gap-2 flex-1">
                                 <button
-                                    onClick={() => setGridDate(addDays(gridDate, -1))}
-                                    className="h-8 w-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-lg leading-none"
+                                    onClick={() => canGoPrevDay && setGridDate(addDays(gridDate, -1))}
+                                    disabled={!canGoPrevDay}
+                                    className={[
+                                        "h-8 w-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 text-lg leading-none transition-colors",
+                                        canGoPrevDay ? "hover:bg-slate-50 cursor-pointer" : "opacity-30 cursor-not-allowed",
+                                    ].join(" ")}
                                     aria-label="Ngày trước"
                                 >
                                     ‹
@@ -297,17 +351,22 @@ export default function ExamScheduleManagementPage() {
                                     {formatDateVN(gridDate)}
                                 </span>
                                 <button
-                                    onClick={() => setGridDate(addDays(gridDate, 1))}
-                                    className="h-8 w-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-lg leading-none"
+                                    onClick={() => canGoNextDay && setGridDate(addDays(gridDate, 1))}
+                                    disabled={!canGoNextDay}
+                                    className={[
+                                        "h-8 w-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 text-lg leading-none transition-colors",
+                                        canGoNextDay ? "hover:bg-slate-50 cursor-pointer" : "opacity-30 cursor-not-allowed",
+                                    ].join(" ")}
                                     aria-label="Ngày sau"
                                 >
                                     ›
                                 </button>
-                                <Input
-                                    type="date"
+                                <DatePickerWithHighlight
                                     value={gridDate}
-                                    onChange={(e) => setGridDate(e.target.value)}
-                                    className="h-8"
+                                    onChange={setGridDate}
+                                    highlightedDates={highlightedDates}
+                                    minDate={selectedPeriod ? toYMD(selectedPeriod.start_date) : undefined}
+                                    maxDate={selectedPeriod ? toYMD(selectedPeriod.end_date) : undefined}
                                 />
                                 <Button
                                     variant="secondary"
@@ -324,10 +383,10 @@ export default function ExamScheduleManagementPage() {
                             <div className="flex items-center gap-2 px-4 py-2 bg-blue-50/50 border-b border-blue-100 text-xs text-blue-700">
                                 <i className="ti ti-calendar-event text-sm" />
                                 <span className="font-medium">{selectedPeriod.name}</span>
-                                <span className="text-blue-400">·</span>
+                                <span className="text-blue-400">:</span>
                                 <span>
                                     {new Date(selectedPeriod.start_date).toLocaleDateString("vi-VN")}
-                                    {" → "}
+                                    {"-"}
                                     {new Date(selectedPeriod.end_date).toLocaleDateString("vi-VN")}
                                 </span>
                             </div>

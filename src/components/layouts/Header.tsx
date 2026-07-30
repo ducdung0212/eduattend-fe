@@ -34,13 +34,6 @@ export function Header({ user }: HeaderProps) {
       <h1 className="text-base font-medium text-slate-900">{title}</h1>
 
       <div className="flex items-center gap-3">
-        {/* Notification bell */}
-        <button
-          className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors"
-          aria-label="Thông báo"
-        >
-          <i className="ti ti-bell text-lg" aria-hidden="true" />
-        </button>
 
         {/* User info */}
         <div className="flex items-center gap-2 text-sm">

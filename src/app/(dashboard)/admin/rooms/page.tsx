@@ -78,7 +78,7 @@ export default function RoomManagementPage() {
       fetchRooms();
       setRoomToDelete(null);
     } catch (err: any) {
-      const msg = err.respone?.data?.message || err.message;
+      const msg = err.response?.data?.message || err.message;
       toast.error(Array.isArray(msg) ? msg.join(", ") : msg);
     } finally {
       setDeleting(false);

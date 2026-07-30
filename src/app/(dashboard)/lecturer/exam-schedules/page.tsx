@@ -13,66 +13,29 @@ import { formatTime, getDayOfWeekVN, formatDateShort } from "@/lib/utils";
 
 const LIMIT = 5;
 
-/** Represents a single row in the table (one class within one exam schedule) */
-interface ExamTableRow {
-    scheduleId: string;
-    subjectCode: string;
-    subjectName: string;
-    group: number;
-    className: string;
-    studentCount: number;
-    dayOfWeek: string;
-    examDate: string;
-    examTime: string;
-    room: string;
-    supervisors: string[];
-    note: string;
-    _idx: number; // for unique key when flattened
-}
-
-function flattenSchedules(schedules: ExamSchedule[]): ExamTableRow[] {
-    const rows: ExamTableRow[] = [];
-    let idx = 0;
-    for (const s of schedules) {
-        const classBreakdown = s.class_breakdown ?? [];
-        if (classBreakdown.length === 0) {
-            rows.push({
-                scheduleId: s.id,
-                subjectCode: s.subject?.subject_code ?? "",
-                subjectName: s.subject?.name ?? "",
-                group: s.group,
-                className: "—",
-                studentCount: s.attendance_count ?? 0,
-                dayOfWeek: getDayOfWeekVN(s.start_time),
-                examDate: formatDateShort(s.start_time),
-                examTime: formatTime(s.start_time),
-                room: s.room?.name ?? "",
-                supervisors: s.supervisors ?? [],
-                note: s.note ?? "",
-                _idx: idx++,
-            });
-        } else {
-            for (const cls of classBreakdown) {
-                rows.push({
-                    scheduleId: s.id,
-                    subjectCode: s.subject?.subject_code ?? "",
-                    subjectName: s.subject?.name ?? "",
-                    group: s.group,
-                    className: cls.class_name,
-                    studentCount: cls.student_count,
-                    dayOfWeek: getDayOfWeekVN(s.start_time),
-                    examDate: formatDateShort(s.start_time),
-                    examTime: formatTime(s.start_time),
-                    room: s.room?.name ?? "",
-                    supervisors: s.supervisors ?? [],
-                    note: s.note ?? "",
-                    _idx: idx++,
-                });
-            }
-        }
+// Component renders class breakdown when row is expanded
+const renderExpandedRow = (row: ExamSchedule) => {
+    if (!row.class_breakdown || row.class_breakdown.length === 0) {
+        return <div className="px-6 py-4 text-sm text-slate-500 italic text-center">Không có thông tin chi tiết lớp học.</div>;
     }
-    return rows;
-}
+    return (
+        <div className="px-6 py-4">
+            <h4 className="text-xs font-semibold text-slate-500 uppercase mb-3 tracking-wide">
+                Chi tiết sinh viên ({row.class_breakdown.length} lớp)
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {row.class_breakdown.map((cls, idx) => (
+                    <div key={idx} className="flex items-center justify-between bg-white border border-slate-200 rounded-lg p-3 shadow-sm hover:border-slate-300 transition-colors">
+                        <span className="text-sm font-medium text-slate-700">{cls.class_name}</span>
+                        <span className="flex items-center gap-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md">
+                            <i className="ti ti-users" /> {cls.student_count} SV
+                        </span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
 
 export default function ExamSchedulePage() {
     const { user, initializing } = useAuth();
@@ -83,9 +46,7 @@ export default function ExamSchedulePage() {
 
     const { page, setPage } = usePagination(meta?.totalPages ?? 1);
 
-    const tableRows = useMemo(() => flattenSchedules(examSchedules), [examSchedules]);
-
-    const COLUMNS: Column<ExamTableRow>[] = useMemo(() => [
+    const COLUMNS: Column<ExamSchedule>[] = useMemo(() => [
         {
             key: "stt",
             label: "STT",
@@ -98,7 +59,7 @@ export default function ExamSchedulePage() {
             label: "Mã môn",
             render: (row) => (
                 <span className="inline-block px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 text-xs font-mono font-medium">
-                    {row.subjectCode}
+                    {row.subject?.subject_code}
                 </span>
             ),
         },
@@ -106,7 +67,7 @@ export default function ExamSchedulePage() {
             key: "subjectName",
             label: "Tên môn",
             render: (row) => (
-                <span className="font-medium text-slate-800 line-clamp-2">{row.subjectName}</span>
+                <span className="font-medium text-slate-800 line-clamp-2">{row.subject?.name}</span>
             ),
         },
         {
@@ -121,19 +82,14 @@ export default function ExamSchedulePage() {
             ),
         },
         {
-            key: "className",
-            label: "Lớp",
-            render: (row) => <span className="whitespace-nowrap">{row.className}</span>,
-        },
-        {
             key: "studentCount",
-            label: "SL SV",
+            label: "Tổng SV",
             align: "center",
-            className: "w-[60px]",
+            className: "w-[80px]",
             render: (row) => (
                 <span className="inline-flex items-center gap-1 text-slate-600 font-medium">
                     <i className="ti ti-users text-slate-400 text-xs" />
-                    {row.studentCount}
+                    {row.attendance_count ?? 0}
                 </span>
             ),
         },
@@ -142,12 +98,13 @@ export default function ExamSchedulePage() {
             label: "Thứ",
             align: "center",
             className: "w-[70px]",
+            render: (row) => <span className="text-slate-600">{getDayOfWeekVN(row.start_time)}</span>
         },
         {
             key: "examDate",
             label: "Ngày thi",
             align: "center",
-            render: (row) => <span className="font-medium whitespace-nowrap">{row.examDate}</span>,
+            render: (row) => <span className="font-medium whitespace-nowrap">{formatDateShort(row.start_time)}</span>,
         },
         {
             key: "examTime",
@@ -155,8 +112,8 @@ export default function ExamSchedulePage() {
             align: "center",
             className: "w-[70px]",
             render: (row) => (
-                <span className="inline-block px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-semibold text-xs">
-                    {row.examTime}
+                <span className="inline-block px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-semibold text-xs whitespace-nowrap">
+                    {formatTime(row.start_time)}
                 </span>
             ),
         },
@@ -166,7 +123,7 @@ export default function ExamSchedulePage() {
             render: (row) => (
                 <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-blue-50 text-blue-700 text-xs font-semibold whitespace-nowrap">
                     <i className="ti ti-door text-sm" />
-                    {row.room}
+                    {row.room?.name}
                 </span>
             ),
         },
@@ -174,7 +131,7 @@ export default function ExamSchedulePage() {
             key: "supervisors",
             label: "CB coi thi",
             render: (row) =>
-                row.supervisors.length > 0 ? (
+                row.supervisors && row.supervisors.length > 0 ? (
                     <div className="flex flex-col gap-0.5 text-xs">
                         {row.supervisors.map((sv, i) => (
                             <span key={i} className="whitespace-nowrap">{sv}</span>
@@ -184,6 +141,13 @@ export default function ExamSchedulePage() {
                     <span className="text-slate-300">—</span>
                 ),
         },
+        {
+            key: "expand",
+            label: "",
+            align: "center",
+            className: "w-[40px]",
+            render: () => <i className="ti ti-chevron-down text-slate-400" />
+        }
     ], [page]);
 
     const fetchExamSchedules = useCallback(async () => {
@@ -224,7 +188,7 @@ export default function ExamSchedulePage() {
             <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>
                     <h1 className="text-xl font-medium text-slate-900 tracking-tight">
-                        Lịch coi thi
+                        Lịch gác thi
                     </h1>
                     <p className="text-sm text-slate-500 mt-0.5">
                         Xem chi tiết lịch coi thi theo dạng bảng
@@ -243,18 +207,20 @@ export default function ExamSchedulePage() {
                     />
                     {!loading && meta && (
                         <span className="text-xs text-slate-400 ml-auto">
-                            {meta.total} ca thi · {tableRows.length} dòng
+                            {meta.total} ca thi
                         </span>
                     )}
                 </div>
 
                 {/* Table */}
-                <DataTable<ExamTableRow>
+                <DataTable<ExamSchedule>
                     columns={COLUMNS}
-                    data={tableRows}
+                    data={examSchedules}
                     loading={loading}
-                    rowKey={(row) => `${row.scheduleId}-${row._idx}`}
+                    rowKey={(row) => row.id}
                     emptyText="Không có lịch coi thi nào."
+                    expandable={true}
+                    expandedRowRender={renderExpandedRow}
                 />
 
                 {/* Phân trang */}
