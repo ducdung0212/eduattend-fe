@@ -13,6 +13,9 @@ interface Props {
     onManageStudents?: (schedule: ExamSchedule) => void;
     onManageSupervisors?: (schedule: ExamSchedule) => void;
     onViewDetails?: (schedule: ExamSchedule) => void;
+    selectable?: boolean;
+    selectedKeys?: string[];
+    onSelectChange?: (keys: string[]) => void;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -168,9 +171,15 @@ function ContextMenu({
 function ExamCard({
     schedule,
     onClick,
+    selectable,
+    selected,
+    onSelect
 }: {
     schedule: ExamSchedule;
     onClick: (e: React.MouseEvent) => void;
+    selectable?: boolean;
+    selected?: boolean;
+    onSelect?: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }) {
     const color = getColor(schedule.subject?.subject_code ?? "");
     const supervisors = schedule.supervisors ?? [];
@@ -181,20 +190,30 @@ function ExamCard({
     return (
         <div
             onClick={onClick}
-            className="flex flex-col gap-1 h-full rounded-[10px] px-3 py-2.5 relative transition-all duration-150 shadow-sm cursor-pointer hover:shadow-md hover:-translate-y-0.5"
+            className="flex flex-col gap-1 h-full rounded-[10px] px-3 py-2.5 relative transition-all duration-150 shadow-sm cursor-pointer hover:shadow-md hover:-translate-y-0.5 group"
             style={{ background: color.bg }}
         >
+            {selectable && (
+                <div className="absolute top-2 right-2 z-10" onClick={(e) => e.stopPropagation()}>
+                    <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={onSelect}
+                        className={cn("rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer transition-opacity", !selected && "opacity-0 group-hover:opacity-100")}
+                    />
+                </div>
+            )}
             {/* Thời gian */}
-            <div className="flex items-center gap-1 text-[11.5px] font-medium text-slate-500 tabular-nums">
+            <div className="flex items-center gap-1 text-[11.5px] font-medium text-slate-500 tabular-nums pr-5">
                 <i className="ti ti-clock text-[11px] text-slate-400 shrink-0" />
                 {startStr} - {endStr}
-                <span className="ml-auto text-[10px] bg-black/5 rounded px-1 py-px text-slate-400">
-                    {schedule.duration} phút
+                <span className="ml-auto text-[10px] bg-black/5 rounded px-1 py-px text-slate-400 hidden sm:inline-block">
+                    {schedule.duration}p
                 </span>
             </div>
 
             {/* Tên môn */}
-            <div className="text-xs font-semibold leading-snug" style={{ color: color.subject }}>
+            <div className="text-xs font-semibold leading-snug pr-4" style={{ color: color.subject }}>
                 {schedule.subject?.name}
             </div>
 
@@ -246,6 +265,9 @@ export function ExamScheduleGridView({
     onManageStudents,
     onManageSupervisors,
     onViewDetails,
+    selectable,
+    selectedKeys = [],
+    onSelectChange,
 }: Props) {
     const [contextMenu, setContextMenu] = useState<{
         schedule: ExamSchedule;
@@ -381,6 +403,16 @@ export function ExamScheduleGridView({
                                                     <ExamCard
                                                         schedule={schedule}
                                                         onClick={(e) => handleCardClick(schedule, e)}
+                                                        selectable={selectable}
+                                                        selected={selectedKeys.includes(schedule.id)}
+                                                        onSelect={(e) => {
+                                                            if (!onSelectChange) return;
+                                                            if (e.target.checked) {
+                                                                onSelectChange([...selectedKeys, schedule.id]);
+                                                            } else {
+                                                                onSelectChange(selectedKeys.filter(k => k !== schedule.id));
+                                                            }
+                                                        }}
                                                     />
                                                 ) : (
                                                     <div className="h-full flex items-center justify-center">

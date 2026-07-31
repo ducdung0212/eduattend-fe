@@ -114,6 +114,33 @@ export default function LecturerManagementPage() {
         }
     }
 
+    // ── Bulk Delete ──────────────────────────────────────────────
+    const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+    const [bulkDeleting, setBulkDeleting] = useState(false);
+    const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
+
+    const handleBulkDelete = async () => {
+        if (selectedKeys.length === 0) return;
+        setBulkDeleting(true);
+        try {
+            const res = await api.post("/lecturers/bulk-delete", { ids: selectedKeys });
+            const { success, failed, errors } = res.data.data;
+            if (failed > 0) {
+                toast.error(`Xóa thành công ${success}, thất bại ${failed}`);
+                console.error("Bulk delete errors:", errors);
+            } else {
+                toast.success(`Đã xóa thành công ${success} giảng viên`);
+            }
+            setSelectedKeys([]);
+            setBulkDeleteModalOpen(false);
+            fetchLecturers();
+        } catch (err: any) {
+            toast.error(err.response?.data?.message || err.message || "Lỗi khi xóa nhiều giảng viên");
+        } finally {
+            setBulkDeleting(false);
+        }
+    };
+
     const columns: Column<any>[] = useMemo(() => [
         {
             key: "lecturer_code",
@@ -256,6 +283,19 @@ export default function LecturerManagementPage() {
                         <option value="true">Đã có ảnh</option>
                         <option value="false">Chưa có ảnh</option>
                     </select>
+
+                    {selectedKeys.length > 0 && (
+                        <div className="flex items-center ml-auto">
+                            <Button
+                                variant="danger"
+                                size="sm"
+                                leftIcon="trash"
+                                onClick={() => setBulkDeleteModalOpen(true)}
+                            >
+                                Xóa {selectedKeys.length} mục
+                            </Button>
+                        </div>
+                    )}
                 </div>
                 <DataTable<any>
                     columns={columns}
@@ -264,6 +304,9 @@ export default function LecturerManagementPage() {
                     rowKey={(l) => l.lecturer_code}
                     skeletonRows={LIMIT}
                     emptyText="Không tìm thấy giảng viên nào."
+                    selectable
+                    selectedRowKeys={selectedKeys}
+                    onSelectChange={setSelectedKeys}
                 />
 
                 <Pagination
@@ -309,6 +352,27 @@ export default function LecturerManagementPage() {
                 </p>
             </Modal>
 
+            {/* Modal Bulk Delete Giảng viên */}
+            <Modal
+                open={bulkDeleteModalOpen}
+                onClose={() => setBulkDeleteModalOpen(false)}
+                title="Xác nhận xóa hàng loạt"
+                size="sm"
+                footer={
+                    <>
+                        <Button variant="secondary" onClick={() => setBulkDeleteModalOpen(false)}>
+                            Hủy
+                        </Button>
+                        <Button variant="danger" loading={bulkDeleting} onClick={handleBulkDelete}>
+                            Xóa {selectedKeys.length} mục
+                        </Button>
+                    </>
+                }
+            >
+                <p className="text-sm text-slate-600">
+                    Bạn có chắc chắn muốn xóa <span className="font-semibold text-slate-900">{selectedKeys.length}</span> giảng viên đã chọn không? Hành động này không thể hoàn tác.
+                </p>
+            </Modal>
         </div>
     )
 }

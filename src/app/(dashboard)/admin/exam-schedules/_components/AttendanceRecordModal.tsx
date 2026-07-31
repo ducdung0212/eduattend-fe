@@ -147,6 +147,46 @@ export function AttendanceRecordModal({ open, examSchedule, onClose, onSuccess }
         }
     };
 
+    // --- Xóa nhiều sinh viên ---
+    const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+    const [bulkDeleting, setBulkDeleting] = useState(false);
+
+    const handleBulkDelete = async () => {
+        if (selectedKeys.length === 0) return;
+        if (!confirm(`Bạn có chắc chắn muốn xóa ${selectedKeys.length} sinh viên đã chọn khỏi danh sách thi không?`)) return;
+
+        setBulkDeleting(true);
+        try {
+            const res = await api.post("/attendance-records/bulk-delete", { ids: selectedKeys });
+            const { success, failed, errors } = res.data.data;
+            if (failed > 0) {
+                toast.error(`Xóa thành công ${success}, thất bại ${failed}`);
+                console.error("Bulk delete errors:", errors);
+            } else {
+                toast.success(`Đã xóa thành công ${success} sinh viên`);
+            }
+            setSelectedKeys([]);
+            fetchRecords();
+            onSuccess?.();
+        } catch (err: any) {
+            toast.error(err.response?.data?.message || err.message || "Lỗi khi xóa nhiều sinh viên");
+        } finally {
+            setBulkDeleting(false);
+        }
+    };
+
+    const toggleSelect = (id: string) => {
+        setSelectedKeys((prev) => prev.includes(id) ? prev.filter((k) => k !== id) : [...prev, id]);
+    };
+
+    const toggleSelectAll = () => {
+        if (selectedKeys.length === records.length && records.length > 0) {
+            setSelectedKeys([]);
+        } else {
+            setSelectedKeys(records.map(r => r.id));
+        }
+    };
+
     return (
         <Modal
             open={open}
@@ -199,21 +239,40 @@ export function AttendanceRecordModal({ open, examSchedule, onClose, onSuccess }
                 </div>
 
                 {/* Tìm kiếm */}
-                <Input
-                    type="text"
-                    value={search}
-                    onChange={(e) => {
-                        setSearch(e.target.value);
-                        setPage(1);
-                    }}
-                    placeholder="Tìm theo mã SV, họ tên..."
-                />
+                <div className="flex items-center gap-2">
+                    <div className="flex-1">
+                        <Input
+                            type="text"
+                            value={search}
+                            onChange={(e) => {
+                                setSearch(e.target.value);
+                                setPage(1);
+                            }}
+                            placeholder="Tìm theo mã SV, họ tên..."
+                        />
+                    </div>
+                    {selectedKeys.length > 0 && (
+                        <div className="pt-5">
+                            <Button variant="danger" size="sm" leftIcon="trash" onClick={handleBulkDelete} loading={bulkDeleting}>
+                                Xóa {selectedKeys.length} mục
+                            </Button>
+                        </div>
+                    )}
+                </div>
 
                 {/* Danh sách sinh viên */}
                 <div className="border border-slate-200 rounded-lg overflow-hidden max-h-72 overflow-y-auto">
                     <table className="w-full text-sm">
                         <thead className="bg-slate-50 sticky top-0 shadow-sm z-10">
                             <tr className="text-left text-slate-500">
+                                <th className="px-3 py-2 w-10">
+                                    <input
+                                        type="checkbox"
+                                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                        checked={records.length > 0 && selectedKeys.length === records.length}
+                                        onChange={toggleSelectAll}
+                                    />
+                                </th>
                                 <th className="px-3 py-2 font-medium">Mã SV</th>
                                 <th className="px-3 py-2 font-medium">Họ tên</th>
                                 <th className="px-3 py-2 font-medium">Lớp</th>
@@ -223,19 +282,27 @@ export function AttendanceRecordModal({ open, examSchedule, onClose, onSuccess }
                         <tbody>
                             {loading ? (
                                 <tr>
-                                    <td colSpan={4} className="px-3 py-6 text-center text-slate-400">
+                                    <td colSpan={5} className="px-3 py-6 text-center text-slate-400">
                                         Đang tải...
                                     </td>
                                 </tr>
                             ) : records.length === 0 ? (
                                 <tr>
-                                    <td colSpan={4} className="px-3 py-6 text-center text-slate-400">
+                                    <td colSpan={5} className="px-3 py-6 text-center text-slate-400">
                                         Chưa có sinh viên nào trong danh sách thi này
                                     </td>
                                 </tr>
                             ) : (
                                 records.map((r) => (
                                     <tr key={r.id} className="border-t border-slate-100 hover:bg-slate-50/50">
+                                        <td className="px-3 py-2">
+                                            <input
+                                                type="checkbox"
+                                                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                checked={selectedKeys.includes(r.id)}
+                                                onChange={() => toggleSelect(r.id)}
+                                            />
+                                        </td>
                                         <td className="px-3 py-2 font-medium text-slate-900">
                                             {r.student?.student_code}
                                         </td>
@@ -246,9 +313,9 @@ export function AttendanceRecordModal({ open, examSchedule, onClose, onSuccess }
                                             {r.student?.class?.name || r.student?.class?.class_code || "—"}
                                         </td>
                                         <td className="px-3 py-2 text-right">
-                                            <Button size="sm" variant="danger" leftIcon="trash" onClick={() => handleDelete(r)}>
-                                                Xóa
-                                            </Button>
+                                            <button onClick={() => handleDelete(r)} className="text-slate-400 hover:text-red-600 transition-colors">
+                                                <i className="ti ti-trash" />
+                                            </button>
                                         </td>
                                     </tr>
                                 ))

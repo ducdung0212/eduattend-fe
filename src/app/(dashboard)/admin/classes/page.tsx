@@ -89,6 +89,33 @@ export default function ClassManagementPage() {
         resetPage();
     }
 
+    // --- State Bulk Delete ---
+    const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+    const [bulkDeleting, setBulkDeleting] = useState(false);
+
+    const handleBulkDelete = async () => {
+        if (selectedKeys.length === 0) return;
+        if (!confirm(`Bạn có chắc chắn muốn xóa ${selectedKeys.length} lớp đã chọn không?`)) return;
+
+        setBulkDeleting(true);
+        try {
+            const res = await api.post("/classes/bulk-delete", { ids: selectedKeys });
+            const { success, failed, errors } = res.data.data;
+            if (failed > 0) {
+                toast.error(`Xóa thành công ${success}, thất bại ${failed}`);
+                console.error("Bulk delete errors:", errors);
+            } else {
+                toast.success(`Đã xóa thành công ${success} lớp`);
+            }
+            setSelectedKeys([]);
+            fetchClasses();
+        } catch (err: any) {
+            toast.error(err.response?.data?.message || err.message || "Lỗi khi xóa nhiều lớp");
+        } finally {
+            setBulkDeleting(false);
+        }
+    };
+
     const confirmDelete = async () => {
         if (!classToDelete) return;
         setDeleting(true);
@@ -185,6 +212,13 @@ export default function ClassManagementPage() {
                             </option>
                         ))}
                     </select>
+                    {selectedKeys.length > 0 && (
+                        <div className="ml-auto">
+                            <Button variant="danger" size="sm" leftIcon="trash" onClick={handleBulkDelete} loading={bulkDeleting}>
+                                Xóa {selectedKeys.length} mục
+                            </Button>
+                        </div>
+                    )}
                 </div>
                 <DataTable<Class>
                     columns={columns}
@@ -193,6 +227,9 @@ export default function ClassManagementPage() {
                     rowKey={(c) => c.class_code}
                     skeletonRows={LIMIT}
                     emptyText="Không tìm thấy lớp nào."
+                    selectable
+                    selectedRowKeys={selectedKeys}
+                    onSelectChange={setSelectedKeys}
                 />
 
                 <Pagination

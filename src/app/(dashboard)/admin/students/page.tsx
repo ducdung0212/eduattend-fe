@@ -151,6 +151,33 @@ export default function StudentManagementPage() {
         }
     }
 
+    // ── Bulk Delete ──────────────────────────────────────────────
+    const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+    const [bulkDeleting, setBulkDeleting] = useState(false);
+    const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
+
+    const handleBulkDelete = async () => {
+        if (selectedKeys.length === 0) return;
+        setBulkDeleting(true);
+        try {
+            const res = await api.post("/students/bulk-delete", { ids: selectedKeys });
+            const { success, failed, errors } = res.data.data;
+            if (failed > 0) {
+                toast.error(`Xóa thành công ${success}, thất bại ${failed}`);
+                console.error("Bulk delete errors:", errors);
+            } else {
+                toast.success(`Đã xóa thành công ${success} sinh viên`);
+            }
+            setSelectedKeys([]);
+            setBulkDeleteModalOpen(false);
+            fetchStudents();
+        } catch (err: any) {
+            toast.error(err.response?.data?.message || err.message || "Lỗi khi xóa nhiều sinh viên");
+        } finally {
+            setBulkDeleting(false);
+        }
+    };
+
     // --- Columns Cấu hình ---
     const columns: Column<any>[] = useMemo(() => [
         {
@@ -308,6 +335,19 @@ export default function StudentManagementPage() {
                         <option value="true">Đã có ảnh</option>
                         <option value="false">Chưa có ảnh</option>
                     </select>
+
+                    {selectedKeys.length > 0 && (
+                        <div className="flex items-center ml-auto">
+                            <Button
+                                variant="danger"
+                                size="sm"
+                                leftIcon="trash"
+                                onClick={() => setBulkDeleteModalOpen(true)}
+                            >
+                                Xóa {selectedKeys.length} mục
+                            </Button>
+                        </div>
+                    )}
                 </div>
 
                 {/* Bảng dữ liệu */}
@@ -318,6 +358,9 @@ export default function StudentManagementPage() {
                     rowKey={(s) => s.student_code}
                     skeletonRows={LIMIT}
                     emptyText="Không tìm thấy sinh viên nào phù hợp."
+                    selectable
+                    selectedRowKeys={selectedKeys}
+                    onSelectChange={setSelectedKeys}
                 />
 
                 {/* Phân trang */}
@@ -362,6 +405,28 @@ export default function StudentManagementPage() {
             >
                 <p className="text-sm text-slate-600">
                     Bạn có chắc chắn muốn xóa sinh viên <span className="font-semibold text-slate-900">{studentToDelete ? fullName(studentToDelete) : ''}</span> không? Hành động này không thể hoàn tác.
+                </p>
+            </Modal>
+
+            {/* Modal Bulk Delete Sinh Viên */}
+            <Modal
+                open={bulkDeleteModalOpen}
+                onClose={() => setBulkDeleteModalOpen(false)}
+                title="Xác nhận xóa hàng loạt"
+                size="sm"
+                footer={
+                    <>
+                        <Button variant="secondary" onClick={() => setBulkDeleteModalOpen(false)}>
+                            Hủy
+                        </Button>
+                        <Button variant="danger" loading={bulkDeleting} onClick={handleBulkDelete}>
+                            Xóa {selectedKeys.length} mục
+                        </Button>
+                    </>
+                }
+            >
+                <p className="text-sm text-slate-600">
+                    Bạn có chắc chắn muốn xóa <span className="font-semibold text-slate-900">{selectedKeys.length}</span> sinh viên đã chọn không? Hành động này không thể hoàn tác.
                 </p>
             </Modal>
         </div>

@@ -69,6 +69,33 @@ export default function RoomManagementPage() {
     resetPage();
   }
 
+  // --- State Bulk Delete ---
+  const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  const handleBulkDelete = async () => {
+    if (selectedKeys.length === 0) return;
+    if (!confirm(`Bạn có chắc chắn muốn xóa ${selectedKeys.length} phòng đã chọn không?`)) return;
+
+    setBulkDeleting(true);
+    try {
+      const res = await api.post("/rooms/bulk-delete", { ids: selectedKeys });
+      const { success, failed, errors } = res.data.data;
+      if (failed > 0) {
+        toast.error(`Xóa thành công ${success}, thất bại ${failed}`);
+        console.error("Bulk delete errors:", errors);
+      } else {
+        toast.success(`Đã xóa thành công ${success} phòng`);
+      }
+      setSelectedKeys([]);
+      fetchRooms();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || err.message || "Lỗi khi xóa nhiều phòng");
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
   const confirmDelete = async () => {
     if (!roomToDelete) return;
     setDeleting(true);
@@ -155,6 +182,13 @@ export default function RoomManagementPage() {
             placeholder="Tìm theo mã hoặc tên phòng..."
             className="flex-1 min-w-48"
           />
+          {selectedKeys.length > 0 && (
+            <div className="ml-auto">
+              <Button variant="danger" size="sm" leftIcon="trash" onClick={handleBulkDelete} loading={bulkDeleting}>
+                Xóa {selectedKeys.length} mục
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Cấu trúc hiển thị danh sách dữ liệu */}
@@ -165,6 +199,9 @@ export default function RoomManagementPage() {
           rowKey={(f) => f.room_code}
           skeletonRows={LIMIT}
           emptyText="Không tìm thấy phòng nào."
+          selectable
+          selectedRowKeys={selectedKeys}
+          onSelectChange={setSelectedKeys}
         />
 
         {/* Điều hướng chuyển dịch số trang */}

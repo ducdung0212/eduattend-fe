@@ -125,6 +125,48 @@ export function ExamPeriodManagerModal({ open, onClose, onSuccess }: ExamPeriodM
         }
     };
 
+    // ── Bulk Delete ──────────────────────────────────────────────
+    const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+    const [bulkDeleting, setBulkDeleting] = useState(false);
+
+    const handleBulkDelete = async () => {
+        if (selectedKeys.length === 0) return;
+        if (!confirm(`Bạn có chắc chắn muốn xóa ${selectedKeys.length} đợt thi đã chọn? Các ca thi thuộc đợt này sẽ được gỡ liên kết.`)) return;
+        
+        setBulkDeleting(true);
+        try {
+            const res = await api.post("/exam-periods/bulk-delete", { ids: selectedKeys });
+            const { success, failed, errors } = res.data.data;
+            if (failed > 0) {
+                toast.error(`Xóa thành công ${success}, thất bại ${failed}`);
+                console.error("Bulk delete errors:", errors);
+            } else {
+                toast.success(`Đã xóa thành công ${success} đợt thi`);
+            }
+            setSelectedKeys([]);
+            fetchPeriods();
+            onSuccess?.();
+        } catch (err: any) {
+            toast.error(err.response?.data?.message || err.message || "Lỗi khi xóa nhiều đợt thi");
+        } finally {
+            setBulkDeleting(false);
+        }
+    };
+
+    const toggleSelect = (id: string) => {
+        setSelectedKeys((prev) =>
+            prev.includes(id) ? prev.filter((k) => k !== id) : [...prev, id]
+        );
+    };
+
+    const toggleSelectAll = () => {
+        if (selectedKeys.length === periods.length && periods.length > 0) {
+            setSelectedKeys([]);
+        } else {
+            setSelectedKeys(periods.map(p => p.id));
+        }
+    };
+
     const formatDate = (dateStr: string) => {
         const d = new Date(dateStr);
         return d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -136,11 +178,26 @@ export function ExamPeriodManagerModal({ open, onClose, onSuccess }: ExamPeriodM
 
                 {/* Thanh tìm kiếm */}
                 {!showForm && (
-                    <SearchBar
-                        value={search}
-                        onChange={handleSearch}
-                        placeholder="Tìm theo tên đợt thi..."
-                    />
+                    <div className="flex items-center gap-2">
+                        <div className="flex-1">
+                            <SearchBar
+                                value={search}
+                                onChange={handleSearch}
+                                placeholder="Tìm theo tên đợt thi..."
+                            />
+                        </div>
+                        {selectedKeys.length > 0 && (
+                            <Button
+                                variant="danger"
+                                size="sm"
+                                leftIcon="trash"
+                                loading={bulkDeleting}
+                                onClick={handleBulkDelete}
+                            >
+                                Xóa {selectedKeys.length} mục
+                            </Button>
+                        )}
+                    </div>
                 )}
 
                 {/* Danh sách đợt thi */}
@@ -159,12 +216,27 @@ export function ExamPeriodManagerModal({ open, onClose, onSuccess }: ExamPeriodM
                 ) : (
                     !showForm && (
                         <>
+                            <div className="flex items-center px-2 py-2">
+                                <input
+                                    type="checkbox"
+                                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 mr-2"
+                                    checked={periods.length > 0 && selectedKeys.length === periods.length}
+                                    onChange={toggleSelectAll}
+                                />
+                                <span className="text-sm text-slate-500 font-medium">Chọn tất cả</span>
+                            </div>
                             <div className="space-y-2 max-h-[340px] overflow-y-auto">
                                 {periods.map((period) => (
                                     <div
                                         key={period.id}
                                         className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition-colors group"
                                     >
+                                        <input
+                                            type="checkbox"
+                                            className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                            checked={selectedKeys.includes(period.id)}
+                                            onChange={() => toggleSelect(period.id)}
+                                        />
                                         {/* Icon + info */}
                                         <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
                                             <i className="ti ti-calendar-event text-blue-600 text-base" />

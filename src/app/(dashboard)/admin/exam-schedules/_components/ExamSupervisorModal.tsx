@@ -143,6 +143,46 @@ export function ExamSupervisorModal({ open, examSchedule, onClose, onSuccess }: 
         }
     };
 
+    // --- Xóa nhiều giám thị ---
+    const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+    const [bulkDeleting, setBulkDeleting] = useState(false);
+
+    const handleBulkDelete = async () => {
+        if (selectedKeys.length === 0) return;
+        if (!confirm(`Bạn có chắc chắn muốn xóa ${selectedKeys.length} giám thị đã chọn khỏi ca thi không?`)) return;
+
+        setBulkDeleting(true);
+        try {
+            const res = await api.post("/exam-supervisors/bulk-delete", { ids: selectedKeys });
+            const { success, failed, errors } = res.data.data;
+            if (failed > 0) {
+                toast.error(`Xóa thành công ${success}, thất bại ${failed}`);
+                console.error("Bulk delete errors:", errors);
+            } else {
+                toast.success(`Đã xóa thành công ${success} giám thị`);
+            }
+            setSelectedKeys([]);
+            fetchSupervisors();
+            onSuccess?.();
+        } catch (err: any) {
+            toast.error(err.response?.data?.message || err.message || "Lỗi khi xóa nhiều giám thị");
+        } finally {
+            setBulkDeleting(false);
+        }
+    };
+
+    const toggleSelect = (id: string) => {
+        setSelectedKeys((prev) => prev.includes(id) ? prev.filter((k) => k !== id) : [...prev, id]);
+    };
+
+    const toggleSelectAll = () => {
+        if (selectedKeys.length === records.length && records.length > 0) {
+            setSelectedKeys([]);
+        } else {
+            setSelectedKeys(records.map(r => r.id));
+        }
+    };
+
     return (
         <Modal
             open={open}
@@ -234,10 +274,26 @@ export function ExamSupervisorModal({ open, examSchedule, onClose, onSuccess }: 
                 </div>
 
                 {/* Danh sách giám thị đã thêm */}
+                <div className="flex justify-between items-center mt-4 mb-2">
+                    <h4 className="text-sm font-medium text-slate-800">Giám thị đã phân công</h4>
+                    {selectedKeys.length > 0 && (
+                        <Button variant="danger" size="sm" leftIcon="trash" onClick={handleBulkDelete} loading={bulkDeleting}>
+                            Xóa {selectedKeys.length} mục
+                        </Button>
+                    )}
+                </div>
                 <div className="border border-slate-200 rounded-lg overflow-hidden max-h-72 overflow-y-auto">
                     <table className="w-full text-sm">
                         <thead className="bg-slate-50 sticky top-0 z-10">
                             <tr className="text-left text-slate-500">
+                                <th className="px-3 py-2 w-10">
+                                    <input
+                                        type="checkbox"
+                                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                        checked={records.length > 0 && selectedKeys.length === records.length}
+                                        onChange={toggleSelectAll}
+                                    />
+                                </th>
                                 <th className="px-3 py-2 font-medium">Mã GV</th>
                                 <th className="px-3 py-2 font-medium">Họ tên</th>
                                 <th className="px-3 py-2 font-medium text-right">Thao tác</th>
@@ -246,27 +302,35 @@ export function ExamSupervisorModal({ open, examSchedule, onClose, onSuccess }: 
                         <tbody>
                             {loading ? (
                                 <tr>
-                                    <td colSpan={3} className="px-3 py-6 text-center text-slate-400">
+                                    <td colSpan={4} className="px-3 py-6 text-center text-slate-400">
                                         Đang tải...
                                     </td>
                                 </tr>
                             ) : records.length === 0 ? (
                                 <tr>
-                                    <td colSpan={3} className="px-3 py-6 text-center text-slate-400">
+                                    <td colSpan={4} className="px-3 py-6 text-center text-slate-400">
                                         Chưa có giám thị nào cho ca thi này
                                     </td>
                                 </tr>
                             ) : (
                                 records.map((r) => (
-                                    <tr key={r.id} className="border-t border-slate-100">
+                                    <tr key={r.id} className="border-t border-slate-100 hover:bg-slate-50">
+                                        <td className="px-3 py-2">
+                                            <input
+                                                type="checkbox"
+                                                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                checked={selectedKeys.includes(r.id)}
+                                                onChange={() => toggleSelect(r.id)}
+                                            />
+                                        </td>
                                         <td className="px-3 py-2 font-medium text-slate-900">{r.lecturer.lecturer_code}</td>
                                         <td className="px-3 py-2 text-slate-700">
                                             {r.lecturer?.last_name} {r.lecturer?.first_name}
                                         </td>
                                         <td className="px-3 py-2 text-right">
-                                            <Button size="sm" variant="danger" leftIcon="trash" onClick={() => handleDelete(r)}>
-                                                Xóa
-                                            </Button>
+                                            <button onClick={() => handleDelete(r)} className="text-slate-400 hover:text-red-600 transition-colors">
+                                                <i className="ti ti-trash" />
+                                            </button>
                                         </td>
                                     </tr>
                                 ))

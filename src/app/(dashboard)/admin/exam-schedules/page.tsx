@@ -34,6 +34,10 @@ export default function ExamScheduleManagementPage() {
     const [deleting, setDeleting] = useState(false);
     const [viewState, setViewState] = useState<{ view: "list" } | { view: "detail"; schedule: ExamSchedule }>({ view: "list" });
 
+    // --- State Bulk Delete ---
+    const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+    const [bulkDeleting, setBulkDeleting] = useState(false);
+
     // --- State Data ---
     const [examSchedules, setExamSchedules] = useState<ExamSchedule[]>([]);
     const [loading, setLoading] = useState(true);
@@ -150,6 +154,29 @@ export default function ExamScheduleManagementPage() {
             toast.error(Array.isArray(msg) ? msg.join(", ") : msg);
         } finally {
             setDeleting(false);
+        }
+    };
+
+    const handleBulkDelete = async () => {
+        if (selectedKeys.length === 0) return;
+        if (!confirm(`Bạn có chắc chắn muốn xóa ${selectedKeys.length} lịch thi đã chọn không?`)) return;
+        
+        setBulkDeleting(true);
+        try {
+            const res = await api.post("/exam-schedules/bulk-delete", { ids: selectedKeys });
+            const { success, failed, errors } = res.data.data;
+            if (failed > 0) {
+                toast.error(`Xóa thành công ${success}, thất bại ${failed}`);
+                console.error("Bulk delete errors:", errors);
+            } else {
+                toast.success(`Đã xóa thành công ${success} lịch thi`);
+            }
+            setSelectedKeys([]);
+            fetchExamSchedules();
+        } catch (err: any) {
+            toast.error(err.response?.data?.message || err.message || "Lỗi khi xóa nhiều lịch thi");
+        } finally {
+            setBulkDeleting(false);
         }
     };
 
@@ -375,6 +402,19 @@ export default function ExamScheduleManagementPage() {
                                 >
                                     Hôm nay
                                 </Button>
+                                {selectedKeys.length > 0 && (
+                                    <div className="ml-auto">
+                                        <Button
+                                            variant="danger"
+                                            size="sm"
+                                            leftIcon="trash"
+                                            loading={bulkDeleting}
+                                            onClick={handleBulkDelete}
+                                        >
+                                            Xóa {selectedKeys.length} mục
+                                        </Button>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -401,6 +441,9 @@ export default function ExamScheduleManagementPage() {
                             onManageStudents={setAttendanceRecordModal}
                             onManageSupervisors={setExamSupervisorModal}
                             onViewDetails={(schedule) => setViewState({ view: "detail", schedule })}
+                            selectable={true}
+                            selectedKeys={selectedKeys}
+                            onSelectChange={setSelectedKeys}
                         />
                     </>
                 ) : (

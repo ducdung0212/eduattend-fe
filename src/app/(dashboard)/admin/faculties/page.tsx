@@ -66,7 +66,7 @@ export default function FacultyManagementPage() {
     resetPage();
   }
 
-  const confirmDelete = async () => {
+    const confirmDelete = async () => {
     if (!facultyToDelete) return;
     setDeleting(true);
     try {
@@ -79,6 +79,33 @@ export default function FacultyManagementPage() {
       toast.error(Array.isArray(msg) ? msg.join(", ") : msg);
     } finally {
       setDeleting(false);
+    }
+  };
+
+  // ── Bulk Delete ──────────────────────────────────────────────
+  const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
+
+  const handleBulkDelete = async () => {
+    if (selectedKeys.length === 0) return;
+    setBulkDeleting(true);
+    try {
+      const res = await api.post("/faculties/bulk-delete", { ids: selectedKeys });
+      const { success, failed, errors } = res.data.data;
+      if (failed > 0) {
+        toast.error(`Xóa thành công ${success}, thất bại ${failed}`);
+        console.error("Bulk delete errors:", errors);
+      } else {
+        toast.success(`Đã xóa thành công ${success} khoa`);
+      }
+      setSelectedKeys([]);
+      setBulkDeleteModalOpen(false);
+      fetchFaculties();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || err.message || "Lỗi khi xóa nhiều khoa");
+    } finally {
+      setBulkDeleting(false);
     }
   };
 
@@ -140,6 +167,18 @@ export default function FacultyManagementPage() {
             placeholder="Tìm theo mã hoặc tên khoa..."
             className="flex-1 min-w-48"
           />
+          {selectedKeys.length > 0 && (
+            <div className="flex items-center ml-auto">
+              <Button
+                variant="danger"
+                size="sm"
+                leftIcon="trash"
+                onClick={() => setBulkDeleteModalOpen(true)}
+              >
+                Xóa {selectedKeys.length} mục
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Cấu trúc hiển thị danh sách dữ liệu */}
@@ -150,6 +189,9 @@ export default function FacultyManagementPage() {
           rowKey={(f) => f.faculty_code}
           skeletonRows={LIMIT}
           emptyText="Không tìm thấy khoa nào."
+          selectable
+          selectedRowKeys={selectedKeys}
+          onSelectChange={setSelectedKeys}
         />
 
         {/* Điều hướng chuyển dịch số trang */}
@@ -188,6 +230,28 @@ export default function FacultyManagementPage() {
       >
         <p className="text-sm text-slate-600">
           Bạn có chắc chắn muốn xóa khoa <span className="font-semibold text-slate-900">{facultyToDelete?.name}</span> không? Hành động này không thể hoàn tác.
+        </p>
+      </Modal>
+
+      {/* Modal Bulk Delete */}
+      <Modal
+        open={bulkDeleteModalOpen}
+        onClose={() => setBulkDeleteModalOpen(false)}
+        title="Xác nhận xóa hàng loạt"
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setBulkDeleteModalOpen(false)}>
+              Hủy
+            </Button>
+            <Button variant="danger" loading={bulkDeleting} onClick={handleBulkDelete}>
+              Xóa {selectedKeys.length} mục
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-slate-600">
+          Bạn có chắc chắn muốn xóa <span className="font-semibold text-slate-900">{selectedKeys.length}</span> khoa đã chọn không? Hành động này không thể hoàn tác.
         </p>
       </Modal>
     </div>
