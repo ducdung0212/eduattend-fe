@@ -140,8 +140,8 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
                     for (const det of detections) {
                         if (!det.boundingBox) continue;
                         const { originX: x, originY: y, width, height } = det.boundingBox;
-                        // Mở rộng vùng crop để bao gồm cả khuôn mặt
-                        const padding = Math.max(width, height) * 0.4;
+                        // Mở rộng vùng crop một chút (5%) vì model full_range đã bao trọn vùng đầu
+                        const padding = Math.max(width, height) * 0.05;
                         const cx = Math.max(0, x - padding);
                         const cy = Math.max(0, y - padding);
                         const cw = Math.min(video.videoWidth - cx, width + padding * 2);

@@ -39,7 +39,7 @@ export function useFaceDetectionCamera(initialFacingMode: "user" | "environment"
                 try {
                     detector = await FaceDetector.createFromOptions(vision, {
                         baseOptions: {
-                            modelAssetPath: "/models/blaze_face_short_range.tflite",
+                            modelAssetPath: "/models/blaze_face_full_range.tflite",
                             delegate: "GPU"
                         },
                         runningMode: "VIDEO",
@@ -48,7 +48,7 @@ export function useFaceDetectionCamera(initialFacingMode: "user" | "environment"
                 } catch (err) {
                     detector = await FaceDetector.createFromOptions(vision, {
                         baseOptions: {
-                            modelAssetPath: "/models/blaze_face_short_range.tflite",
+                            modelAssetPath: "/models/blaze_face_full_range.tflite",
                             delegate: "CPU"
                         },
                         runningMode: "VIDEO",
@@ -113,8 +113,6 @@ export function useFaceDetectionCamera(initialFacingMode: "user" | "environment"
 
         if (!detectCanvasRef.current) {
             detectCanvasRef.current = document.createElement("canvas");
-            detectCanvasRef.current.width = 320;
-            detectCanvasRef.current.height = 240;
         }
 
         let lastDetectionTime = 0;
@@ -129,10 +127,15 @@ export function useFaceDetectionCamera(initialFacingMode: "user" | "environment"
                     canvas.width = video.videoWidth;
                     canvas.height = video.videoHeight;
                 }
+                
+                if (detectCanvasRef.current!.width !== video.videoWidth || detectCanvasRef.current!.height !== video.videoHeight) {
+                    detectCanvasRef.current!.width = video.videoWidth;
+                    detectCanvasRef.current!.height = video.videoHeight;
+                }
 
                 try {
                     const dctx = detectCanvasRef.current!.getContext("2d")!;
-                    dctx.drawImage(video, 0, 0, 320, 240);
+                    dctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
 
                     const ts = getValidTimestamp();
                     const result = detectorRef.current.detectForVideo(detectCanvasRef.current!, ts);
@@ -141,17 +144,22 @@ export function useFaceDetectionCamera(initialFacingMode: "user" | "environment"
 
                     if (ctx) {
                         ctx.clearRect(0, 0, canvas.width, canvas.height);
-                        const scaleX = video.videoWidth / 320;
-                        const scaleY = video.videoHeight / 240;
+                        const scaleX = 1;
+                        const scaleY = 1;
 
                         detections.forEach((det) => {
                             if (!det.boundingBox) return;
                             const { originX, originY, width, height } = det.boundingBox;
                             
-                            const x = originX * scaleX;
-                            const y = originY * scaleY;
-                            const w = width * scaleX;
-                            const h = height * scaleY;
+                            // Model full_range trả về bounding box bao toàn bộ vùng đầu khá to
+                            // Thu nhỏ 15% mỗi cạnh để khung xanh lá cây bám sát khuôn mặt hơn (UI đẹp hơn)
+                            const shrinkX = width * 0.15;
+                            const shrinkY = height * 0.15;
+                            
+                            const x = (originX + shrinkX) * scaleX;
+                            const y = (originY + shrinkY) * scaleY;
+                            const w = (width - shrinkX * 2) * scaleX;
+                            const h = (height - shrinkY * 2) * scaleY;
 
                             ctx.strokeStyle = "#22c55e";
                             ctx.lineWidth = 3;
