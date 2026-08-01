@@ -52,7 +52,7 @@ export function useFaceDetectionCamera(initialFacingMode: "user" | "environment"
                             delegate: "CPU"
                         },
                         runningMode: "VIDEO",
-                        minDetectionConfidence: 0.5
+                        minDetectionConfidence: 0.4
                     });
                 }
                 detectorRef.current = detector;
