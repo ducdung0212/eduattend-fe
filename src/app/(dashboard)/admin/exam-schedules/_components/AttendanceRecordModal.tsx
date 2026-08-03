@@ -4,10 +4,11 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Pagination } from "@/components/shared/Pagination";
+import { DataTable, Column } from "@/components/shared/DataTable";
 import api from "@/lib/api";
 import { formatDateTime } from "@/lib/utils";
 import { ExamSchedule, AttendanceRecord } from "@/types";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import toast from "react-hot-toast";
 import * as XLSX from "xlsx";
 
@@ -96,7 +97,7 @@ export function AttendanceRecordModal({ open, examSchedule, onClose, onSuccess }
             if (success.length > 0) {
                 toast.success(`Đã thêm ${success.length} sinh viên thành công`);
             }
-            
+
             if (failed.length > 5) {
                 toast.error(`Có ${failed.length} sinh viên bị lỗi, không thể thêm vào ca thi.`);
                 setTimeout(() => {
@@ -175,17 +176,35 @@ export function AttendanceRecordModal({ open, examSchedule, onClose, onSuccess }
         }
     };
 
-    const toggleSelect = (id: string) => {
-        setSelectedKeys((prev) => prev.includes(id) ? prev.filter((k) => k !== id) : [...prev, id]);
-    };
-
-    const toggleSelectAll = () => {
-        if (selectedKeys.length === records.length && records.length > 0) {
-            setSelectedKeys([]);
-        } else {
-            setSelectedKeys(records.map(r => r.id));
+    const columns: Column<AttendanceRecord>[] = useMemo(() => [
+        {
+            key: "student_code",
+            label: "Mã SV",
+            render: (r) => <span className="font-medium text-slate-900">{r.student?.student_code}</span>,
+        },
+        {
+            key: "name",
+            label: "Họ tên",
+            render: (r) => <span className="text-slate-700">{r.student?.last_name} {r.student?.first_name}</span>,
+        },
+        {
+            key: "class",
+            label: "Lớp",
+            render: (r) => <span className="text-slate-500">{r.student?.class?.name || r.student?.class?.class_code || "—"}</span>,
+        },
+        {
+            key: "actions",
+            label: "Thao tác",
+            align: "right",
+            render: (r) => (
+                <div className="flex justify-end">
+                    <Button size="sm" variant="danger" leftIcon="trash" onClick={() => handleDelete(r)}>
+                        Xóa
+                    </Button>
+                </div>
+            ),
         }
-    };
+    ], []);
 
     return (
         <Modal
@@ -243,6 +262,7 @@ export function AttendanceRecordModal({ open, examSchedule, onClose, onSuccess }
                     <div className="flex-1">
                         <Input
                             type="text"
+                            leftIcon="search"
                             value={search}
                             onChange={(e) => {
                                 setSearch(e.target.value);
@@ -262,66 +282,16 @@ export function AttendanceRecordModal({ open, examSchedule, onClose, onSuccess }
 
                 {/* Danh sách sinh viên */}
                 <div className="border border-slate-200 rounded-lg overflow-hidden max-h-72 overflow-y-auto">
-                    <table className="w-full text-sm">
-                        <thead className="bg-slate-50 sticky top-0 shadow-sm z-10">
-                            <tr className="text-left text-slate-500">
-                                <th className="px-3 py-2 w-10">
-                                    <input
-                                        type="checkbox"
-                                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                                        checked={records.length > 0 && selectedKeys.length === records.length}
-                                        onChange={toggleSelectAll}
-                                    />
-                                </th>
-                                <th className="px-3 py-2 font-medium">Mã SV</th>
-                                <th className="px-3 py-2 font-medium">Họ tên</th>
-                                <th className="px-3 py-2 font-medium">Lớp</th>
-                                <th className="px-3 py-2 font-medium text-right">Thao tác</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {loading ? (
-                                <tr>
-                                    <td colSpan={5} className="px-3 py-6 text-center text-slate-400">
-                                        Đang tải...
-                                    </td>
-                                </tr>
-                            ) : records.length === 0 ? (
-                                <tr>
-                                    <td colSpan={5} className="px-3 py-6 text-center text-slate-400">
-                                        Chưa có sinh viên nào trong danh sách thi này
-                                    </td>
-                                </tr>
-                            ) : (
-                                records.map((r) => (
-                                    <tr key={r.id} className="border-t border-slate-100 hover:bg-slate-50/50">
-                                        <td className="px-3 py-2">
-                                            <input
-                                                type="checkbox"
-                                                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                                checked={selectedKeys.includes(r.id)}
-                                                onChange={() => toggleSelect(r.id)}
-                                            />
-                                        </td>
-                                        <td className="px-3 py-2 font-medium text-slate-900">
-                                            {r.student?.student_code}
-                                        </td>
-                                        <td className="px-3 py-2 text-slate-700">
-                                            {r.student?.last_name} {r.student?.first_name}
-                                        </td>
-                                        <td className="px-3 py-2 text-slate-500">
-                                            {r.student?.class?.name || r.student?.class?.class_code || "—"}
-                                        </td>
-                                        <td className="px-3 py-2 text-right">
-                                            <button onClick={() => handleDelete(r)} className="text-slate-400 hover:text-red-600 transition-colors">
-                                                <i className="ti ti-trash" />
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
+                    <DataTable<AttendanceRecord>
+                        columns={columns}
+                        data={records}
+                        loading={loading}
+                        rowKey={(r) => r.id}
+                        emptyText="Chưa có sinh viên nào trong danh sách thi này"
+                        selectable={true}
+                        selectedRowKeys={selectedKeys}
+                        onSelectChange={setSelectedKeys}
+                    />
                 </div>
 
                 {meta.totalPages > 1 && (

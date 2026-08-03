@@ -17,7 +17,7 @@ import * as XLSX from "xlsx";
 
 interface Props {
     schedule: ExamSchedule;
-    onBack: () => void;
+    onBack?: () => void;
     hideAttendanceButton?: boolean;
 }
 
@@ -375,13 +375,15 @@ export function ExamDetailView({ schedule, onBack, hideAttendanceButton }: Props
         <div className="space-y-5">
             {/* Header */}
             <div className="flex items-center gap-3">
-                <button
-                    onClick={onBack}
-                    className="h-9 w-9 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors"
-                    aria-label="Quay lại"
-                >
-                    <i className="ti ti-arrow-left text-lg" />
-                </button>
+                {onBack && (
+                    <button
+                        onClick={onBack}
+                        className="h-9 w-9 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors"
+                        aria-label="Quay lại"
+                    >
+                        <i className="ti ti-arrow-left text-lg" />
+                    </button>
+                )}
                 <div>
                     <h2 className="text-lg font-semibold text-slate-900">Chi tiết ca thi</h2>
                     <p className="text-xs text-slate-500">Thông tin chi tiết và danh sách thí sinh</p>

@@ -1,11 +1,13 @@
 'use client';
 
 import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
+import { DataTable, Column } from "@/components/shared/DataTable";
 import api from "@/lib/api";
 import { formatDateTime } from "@/lib/utils";
 import { ExamSchedule, ExamSupervisor } from "@/types";
-import { useCallback, useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import toast from "react-hot-toast";
 
 interface ExamSupervisorModalProps {
@@ -119,7 +121,7 @@ export function ExamSupervisorModal({ open, examSchedule, onClose, onSuccess }: 
                 fetchSupervisors();
                 onSuccess?.();
             }
-            
+
             failed.forEach((f) => {
                 toast.error(`${f.lecturer_code}: ${f.reason}`);
             });
@@ -171,17 +173,30 @@ export function ExamSupervisorModal({ open, examSchedule, onClose, onSuccess }: 
         }
     };
 
-    const toggleSelect = (id: string) => {
-        setSelectedKeys((prev) => prev.includes(id) ? prev.filter((k) => k !== id) : [...prev, id]);
-    };
-
-    const toggleSelectAll = () => {
-        if (selectedKeys.length === records.length && records.length > 0) {
-            setSelectedKeys([]);
-        } else {
-            setSelectedKeys(records.map(r => r.id));
+    const columns: Column<ExamSupervisor>[] = useMemo(() => [
+        {
+            key: "lecturer_code",
+            label: "Mã GV",
+            render: (r) => <span className="font-medium text-slate-900">{r.lecturer?.lecturer_code}</span>,
+        },
+        {
+            key: "name",
+            label: "Họ tên",
+            render: (r) => <span className="text-slate-700">{r.lecturer?.last_name} {r.lecturer?.first_name}</span>,
+        },
+        {
+            key: "actions",
+            label: "Thao tác",
+            align: "right",
+            render: (r) => (
+                <div className="flex justify-end">
+                    <Button size="sm" variant="danger" leftIcon="trash" onClick={() => handleDelete(r)}>
+                        Xóa
+                    </Button>
+                </div>
+            ),
         }
-    };
+    ], []);
 
     return (
         <Modal
@@ -212,14 +227,10 @@ export function ExamSupervisorModal({ open, examSchedule, onClose, onSuccess }: 
 
                 {/* Combobox Tìm & Thêm giảng viên */}
                 <div className="flex flex-col gap-1.5 relative" ref={dropdownRef}>
-                    <label className="text-sm font-medium text-slate-700">
-                        Thêm giám thị
-                    </label>
                     <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <i className="ti ti-search text-slate-400" />
-                        </div>
-                        <input
+                        <Input
+                            label="Thêm giám thị"
+                            leftIcon="search"
                             type="text"
                             value={lecturerSearch}
                             onChange={(e) => {
@@ -230,10 +241,10 @@ export function ExamSupervisorModal({ open, examSchedule, onClose, onSuccess }: 
                                 if (lecturerOptions.length > 0) setShowDropdown(true);
                             }}
                             placeholder="Nhập mã hoặc tên giảng viên..."
-                            className="w-full rounded-lg border text-sm text-slate-900 bg-white h-10 pl-9 pr-4 outline-none transition-colors border-slate-200 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+                            className="pr-10"
                         />
                         {isSearchingLecturer && (
-                            <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                            <div className="absolute right-3 top-[34px] flex items-center">
                                 <span className="w-4 h-4 border-2 border-slate-200 border-t-blue-500 rounded-full animate-spin" />
                             </div>
                         )}
@@ -283,60 +294,16 @@ export function ExamSupervisorModal({ open, examSchedule, onClose, onSuccess }: 
                     )}
                 </div>
                 <div className="border border-slate-200 rounded-lg overflow-hidden max-h-72 overflow-y-auto">
-                    <table className="w-full text-sm">
-                        <thead className="bg-slate-50 sticky top-0 z-10">
-                            <tr className="text-left text-slate-500">
-                                <th className="px-3 py-2 w-10">
-                                    <input
-                                        type="checkbox"
-                                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                                        checked={records.length > 0 && selectedKeys.length === records.length}
-                                        onChange={toggleSelectAll}
-                                    />
-                                </th>
-                                <th className="px-3 py-2 font-medium">Mã GV</th>
-                                <th className="px-3 py-2 font-medium">Họ tên</th>
-                                <th className="px-3 py-2 font-medium text-right">Thao tác</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {loading ? (
-                                <tr>
-                                    <td colSpan={4} className="px-3 py-6 text-center text-slate-400">
-                                        Đang tải...
-                                    </td>
-                                </tr>
-                            ) : records.length === 0 ? (
-                                <tr>
-                                    <td colSpan={4} className="px-3 py-6 text-center text-slate-400">
-                                        Chưa có giám thị nào cho ca thi này
-                                    </td>
-                                </tr>
-                            ) : (
-                                records.map((r) => (
-                                    <tr key={r.id} className="border-t border-slate-100 hover:bg-slate-50">
-                                        <td className="px-3 py-2">
-                                            <input
-                                                type="checkbox"
-                                                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                                checked={selectedKeys.includes(r.id)}
-                                                onChange={() => toggleSelect(r.id)}
-                                            />
-                                        </td>
-                                        <td className="px-3 py-2 font-medium text-slate-900">{r.lecturer.lecturer_code}</td>
-                                        <td className="px-3 py-2 text-slate-700">
-                                            {r.lecturer?.last_name} {r.lecturer?.first_name}
-                                        </td>
-                                        <td className="px-3 py-2 text-right">
-                                            <button onClick={() => handleDelete(r)} className="text-slate-400 hover:text-red-600 transition-colors">
-                                                <i className="ti ti-trash" />
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
+                    <DataTable<ExamSupervisor>
+                        columns={columns}
+                        data={records}
+                        loading={loading}
+                        rowKey={(r) => r.id}
+                        emptyText="Chưa có giám thị nào cho ca thi này"
+                        selectable={true}
+                        selectedRowKeys={selectedKeys}
+                        onSelectChange={setSelectedKeys}
+                    />
                 </div>
             </div>
         </Modal>
