@@ -28,7 +28,9 @@ const ROLE_LABEL: Record<string, string> = {
 export function Sidebar({ menuItems, user }: SidebarProps) {
   const pathname = usePathname();
   const { logout } = useAuth();
-  const [openGroups, setOpenGroups] = useState<string[]>([]);
+  const [openGroups, setOpenGroups] = useState<string[]>(
+    () => menuItems.filter((item) => item.children).map((item) => item.href)
+  );
   
   // State quản lý việc đóng/mở sidebar
   const [isCollapsed, setIsCollapsed] = useState(false);
