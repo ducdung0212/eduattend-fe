@@ -10,6 +10,9 @@ const ROLE_HOME: Record<string, string> = {
 // Các path không cần auth
 const PUBLIC_PATHS = ['/login'];
 
+// Các path dùng chung cho tất cả role đã đăng nhập (không cần prefix role)
+const SHARED_AUTH_PATHS = ['/change-password'];
+
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
@@ -25,6 +28,7 @@ export function middleware(req: NextRequest) {
   const token = req.cookies.get('access_token')?.value;
   const userRole = req.cookies.get('user_role')?.value;
   const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
+  const isSharedAuth = SHARED_AUTH_PATHS.some((p) => pathname.startsWith(p));
 
   console.log(`[Middleware] Path: ${pathname}, Token: ${!!token}, Role: ${userRole}`);
 
@@ -42,6 +46,11 @@ export function middleware(req: NextRequest) {
   if (isPublic) {
     const home = ROLE_HOME[userRole] ?? '/';
     return NextResponse.redirect(new URL(home, req.url));
+  }
+
+  // ── Trang dùng chung cho mọi role → cho phép truy cập ────────
+  if (isSharedAuth) {
+    return NextResponse.next();
   }
 
   // ── Truy cập sai role → redirect về đúng dashboard của mình ──
