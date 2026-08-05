@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import api from "@/lib/api";
 import { todayString, formatDateVN, addDays, formatTime, toYMD } from "@/lib/utils";
-import { ExamPeriod, ExamSchedule } from "@/types";
+import { Semester, ExamSchedule } from "@/types";
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { ExamScheduleFormModal } from "./_components/ExamScheduleFormModal";
@@ -13,9 +13,9 @@ import { ExamScheduleImportModal } from "./_components/ExamScheduleImportModal";
 import { ExamSupervisorModal } from "./_components/ExamSupervisorModal";
 import { AttendanceRecordModal } from "./_components/AttendanceRecordModal";
 import { ExamScheduleGridView } from "./_components/ExamScheduleGridView";
-import { ExamPeriodManagerModal } from "./_components/ExamPeriodManagerModal";
+import { SemesterManagerModal } from "./_components/SemesterManagerModal";
 import { Input } from "@/components/ui/Input";
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
 import { ExamDetailView } from "@/components/shared/ExamDetailView";
 import { formatDateTime } from "@/lib/utils";
 
@@ -23,9 +23,9 @@ export default function ExamScheduleManagementPage() {
     // --- State Modals ---
     const [modalOpen, setModalOpen] = useState(false);
     const [importModalOpen, setImportModalOpen] = useState(false);
-    const [periodManagerOpen, setPeriodManagerOpen] = useState(false);
+    const [semesterManagerOpen, setSemesterManagerOpen] = useState(false);
     const [exportModalOpen, setExportModalOpen] = useState(false);
-    const [exportSelectedPeriodId, setExportSelectedPeriodId] = useState("");
+    const [exportSelectedSemesterId, setExportSelectedSemesterId] = useState("");
     const [isExporting, setIsExporting] = useState(false);
     const [attendanceRecordModal, setAttendanceRecordModal] = useState<ExamSchedule | null>(null);
     const [examSupervisorModal, setExamSupervisorModal] = useState<ExamSchedule | null>(null);
@@ -45,32 +45,32 @@ export default function ExamScheduleManagementPage() {
     // --- State Filters ---
     const [gridDate, setGridDate] = useState(todayString());
 
-    // --- Đợt thi filter ---
-    const [examPeriods, setExamPeriods] = useState<ExamPeriod[]>([]);
-    const [selectedPeriodId, setSelectedPeriodId] = useState<string>("");
+    // --- Học kì filter ---
+    const [semesters, setSemesters] = useState<Semester[]>([]);
+    const [selectedSemesterId, setSelectedSemesterId] = useState<string>("");
     const [periodHighlightedDates, setPeriodHighlightedDates] = useState<string[]>([]);
     const [isDateResolved, setIsDateResolved] = useState(false);
 
-    // Fetch đợt thi
-    const fetchPeriods = useCallback(async () => {
+    // Fetch học kì
+    const fetchSemesters = useCallback(async () => {
         try {
-            const res = await api.get("/exam-periods", { params: { limit: 100 } });
-            setExamPeriods(res.data?.data || []);
+            const res = await api.get("/semesters", { params: { limit: 100 } });
+            setSemesters(res.data?.data || []);
         } catch {
-            console.error("Lỗi tải đợt thi");
+            console.error("Lỗi tải học kì");
         }
     }, []);
 
     useEffect(() => {
-        fetchPeriods();
-    }, [fetchPeriods]);
+        fetchSemesters();
+    }, [fetchSemesters]);
 
     useEffect(() => {
         setIsDateResolved(false);
-        // Fetch tất cả lịch thi (hoặc theo đợt) để lấy các ngày có ca thi
+        // Fetch tất cả lịch thi (hoặc theo học kì) để lấy các ngày có ca thi
         api.get("/exam-schedules", {
             params: {
-                exam_period_id: selectedPeriodId || undefined,
+                semester_id: selectedSemesterId || undefined,
                 limit: 1000,
             },
         })
@@ -90,9 +90,9 @@ export default function ExamScheduleManagementPage() {
             // Tự động chuyển sang ngày có ca thi mới nhất
             if (dates.length > 0) {
                 setGridDate(dates[0]);
-            } else if (selectedPeriodId) {
-                // Nếu đợt thi rỗng, về ngày bắt đầu đợt thi
-                const p = examPeriods.find(x => x.id === selectedPeriodId);
+            } else if (selectedSemesterId) {
+                // Nếu học kì rỗng, về ngày bắt đầu học kì
+                const p = semesters.find(x => x.id === selectedSemesterId);
                 if (p && p.start_date) setGridDate(toYMD(p.start_date));
             } else {
                 // Nếu 'Tất cả' rỗng, về hôm nay
@@ -102,7 +102,7 @@ export default function ExamScheduleManagementPage() {
         .catch((e) => console.error("Lỗi lấy danh sách ngày có ca thi", e))
         .finally(() => setIsDateResolved(true));
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedPeriodId]);
+    }, [selectedSemesterId]);
 
     // Fetch danh sách lịch thi
     const fetchExamSchedules = useCallback(async () => {
@@ -114,7 +114,7 @@ export default function ExamScheduleManagementPage() {
                     page: 1,
                     limit: 999,
                     start_time: gridDate || undefined,
-                    exam_period_id: selectedPeriodId || undefined,
+                    semester_id: selectedSemesterId || undefined,
                 },
             });
             setExamSchedules(res.data?.data ?? []);
@@ -124,7 +124,7 @@ export default function ExamScheduleManagementPage() {
         } finally {
             setLoading(false);
         }
-    }, [gridDate, selectedPeriodId, isDateResolved]);
+    }, [gridDate, selectedSemesterId, isDateResolved]);
 
     useEffect(() => {
         fetchExamSchedules();
@@ -180,34 +180,34 @@ export default function ExamScheduleManagementPage() {
         }
     };
 
-    // Tìm đợt thi đang chọn (để hiển thị khoảng ngày)
-    const selectedPeriod = examPeriods.find((p) => p.id === selectedPeriodId);
+    // Tìm học kì đang chọn (để hiển thị khoảng ngày)
+    const selectedSemester = semesters.find((p) => p.id === selectedSemesterId);
 
     // Các ngày có ca thi (dùng để highlight trong date picker)
     const highlightedDates = periodHighlightedDates;
 
     // Kiểm tra giới hạn nút ‹ / › ngày
-    const canGoPrevDay = !selectedPeriod || gridDate > toYMD(selectedPeriod.start_date);
-    const canGoNextDay = !selectedPeriod || gridDate < toYMD(selectedPeriod.end_date);
+    const canGoPrevDay = !selectedSemester || gridDate > toYMD(selectedSemester.start_date);
+    const canGoNextDay = !selectedSemester || gridDate < toYMD(selectedSemester.end_date);
 
     const handleExportPeriod = async () => {
-        if (!exportSelectedPeriodId) {
-            toast.error("Vui lòng chọn đợt thi");
+        if (!exportSelectedSemesterId) {
+            toast.error("Vui lòng chọn học kì");
             return;
         }
         setIsExporting(true);
-        const periodToExport = examPeriods.find((p) => p.id === exportSelectedPeriodId);
+        const semesterToExport = semesters.find((p) => p.id === exportSelectedSemesterId);
         const toastId = toast.loading("Đang tổng hợp dữ liệu ca thi, vui lòng đợi...");
         try {
             const resSchedules = await api.get("/exam-schedules", {
                 params: {
-                    exam_period_id: exportSelectedPeriodId,
+                    semester_id: exportSelectedSemesterId,
                     limit: 1000,
                 },
             });
             const schedules = resSchedules.data?.data as ExamSchedule[] || [];
             if (schedules.length === 0) {
-                toast.error("Đợt thi này không có ca thi nào", { id: toastId });
+                toast.error("Học kì này không có ca thi nào", { id: toastId });
                 return;
             }
 
@@ -235,68 +235,136 @@ export default function ExamScheduleManagementPage() {
                 });
 
                 let present = 0;
-                let late = 0;
-                let excused = 0;
                 let absent = 0;
 
                 records.forEach((r) => {
-                    if (r.status === "present" || (r.status !== "late" && r.status !== "excused" && r.attendance_time)) {
-                        present++;
-                    } else if (r.status === "late") {
-                        late++;
-                    } else if (r.status === "excused") {
-                        excused++;
-                    } else {
-                        absent++;
-                    }
+                    const currentStatus = r.attendance_time ? "present" : "absent";
+                    if (currentStatus === "present") present++;
+                    else absent++;
                 });
 
                 const totalStudents = records.length;
-                const totalPresent = present + late; // Đi muộn tính vào có mặt
 
                 const aoaData: any[][] = [];
-                // Thông tin ca thi ở đầu sheet
-                aoaData.push(["THÔNG TIN CA THI"]);
-                aoaData.push(["Môn thi:", sch.subject?.name || "", "", "Mã môn:", sch.subject?.subject_code || ""]);
-                aoaData.push(["Phòng thi:", sch.room?.name || sch.room?.room_code || "", "", "Ngày thi:", sch.start_time ? formatDateVN(toYMD(sch.start_time)) : ""]);
-                aoaData.push(["Giờ bắt đầu:", sch.start_time ? formatTime(sch.start_time) : "", "", "Thời lượng:", `${sch.duration || 120} phút`]);
-                aoaData.push(["Nhóm/Ca thi:", sch.group || "", "", "Giám thị:", (sch.supervisors || []).join(", ") || "Chưa phân công"]);
-                aoaData.push([]); // Dòng trống
-                
-                // Thống kê điểm danh
-                aoaData.push(["THỐNG KÊ ĐIỂM DANH"]);
-                aoaData.push(["Tổng thí sinh:", totalStudents]);
-                aoaData.push(["Có mặt:", totalPresent]);
-                aoaData.push(["Vắng mặt:", absent]);
-                aoaData.push(["Đi muộn:", late]);
-                aoaData.push(["Có phép:", excused]);
-                aoaData.push([]); // Dòng trống
+                // Header
+                aoaData.push([{ v: "DANH SÁCH ĐIỂM DANH SINH VIÊN", t: "s", s: { font: { bold: true, sz: 14 }, alignment: { horizontal: "center" } } }, "", "", "", "", "", ""]);
+                aoaData.push([]);
+
+                // Thông tin ca thi dọc
+                const infoStyle = { font: { bold: true } };
+                const supervisorNames = (sch.supervisors || []).map(s => typeof s === 'string' ? s : `${(s as any).lecturer?.last_name || ""} ${(s as any).lecturer?.first_name || ""}`.trim()).join("\n") || "Chưa phân công";
+
+                aoaData.push([
+                    { v: "Môn thi:", t: "s", s: infoStyle }, { v: sch.subject?.name || "" }, "", "",
+                    { v: "Tổng thí sinh:", t: "s", s: infoStyle }, { v: totalStudents }
+                ]);
+                aoaData.push([
+                    { v: "Mã môn:", t: "s", s: infoStyle }, { v: sch.subject?.subject_code || "" }, "", "",
+                    { v: "Có mặt:", t: "s", s: infoStyle }, { v: present }
+                ]);
+                aoaData.push([
+                    { v: "Phòng thi:", t: "s", s: infoStyle }, { v: sch.room?.name || sch.room?.room_code || "" }, "", "",
+                    { v: "Vắng mặt:", t: "s", s: infoStyle }, { v: absent }
+                ]);
+                aoaData.push([{ v: "Ngày thi:", t: "s", s: infoStyle }, { v: sch.start_time ? formatDateVN(toYMD(sch.start_time)) : "" }]);
+                aoaData.push([{ v: "Thời gian:", t: "s", s: infoStyle }, { v: `${sch.start_time ? formatTime(sch.start_time) : ""} (${sch.duration || 120} phút)` }]);
+                aoaData.push([{ v: "Nhóm/Ca thi:", t: "s", s: infoStyle }, { v: sch.group || "" }]);
+                aoaData.push([
+                    { v: "Giám thị:", t: "s", s: { font: { bold: true }, alignment: { vertical: "top", horizontal: "left" } } }, 
+                    { v: supervisorNames, t: "s", s: { alignment: { wrapText: true, horizontal: "left", vertical: "top" } } }
+                ]);
+                aoaData.push([]);
 
                 // Tiêu đề bảng điểm danh
-                aoaData.push(["STT", "Mã SV", "Họ tên", "Lớp", "Trạng thái", "Thời gian điểm danh", "Ghi chú"]);
+                const headerStyle = {
+                    font: { bold: true, color: { rgb: "FFFFFF" } },
+                    fill: { fgColor: { rgb: "4F81BD" } },
+                    alignment: { horizontal: "center", vertical: "center" },
+                    border: {
+                        top: { style: "thin", color: { rgb: "000000" } },
+                        bottom: { style: "thin", color: { rgb: "000000" } },
+                        left: { style: "thin", color: { rgb: "000000" } },
+                        right: { style: "thin", color: { rgb: "000000" } },
+                    }
+                };
+
+                const cellStyle = {
+                    border: {
+                        top: { style: "thin", color: { rgb: "000000" } },
+                        bottom: { style: "thin", color: { rgb: "000000" } },
+                        left: { style: "thin", color: { rgb: "000000" } },
+                        right: { style: "thin", color: { rgb: "000000" } },
+                    },
+                    alignment: { vertical: "center" }
+                };
+
+                const centerCellStyle = { ...cellStyle, alignment: { horizontal: "center", vertical: "center" } };
+
+                aoaData.push([
+                    { v: "STT", t: "s", s: headerStyle },
+                    { v: "Mã SV", t: "s", s: headerStyle },
+                    { v: "Họ và tên", t: "s", s: headerStyle },
+                    { v: "", t: "s", s: headerStyle },
+                    { v: "Lớp", t: "s", s: headerStyle },
+                    { v: "Trạng thái", t: "s", s: headerStyle },
+                    { v: "Thời gian điểm danh", t: "s", s: headerStyle },
+                    { v: "Ghi chú", t: "s", s: headerStyle }
+                ]);
 
                 // Dữ liệu điểm danh
                 records.forEach((r, index) => {
+                    const isPresent = !!r.attendance_time;
                     aoaData.push([
-                        index + 1,
-                        r.student?.student_code || "",
-                        `${r.student?.last_name || ""} ${r.student?.first_name || ""}`.trim(),
-                        r.student?.class?.name || r.student?.class?.class_code || "",
-                        r.status === "present" ? "Có mặt" : r.status === "late" ? "Đi muộn" : r.status === "excused" ? "Có phép" : (r.attendance_time ? "Có mặt" : "Vắng mặt"),
-                        r.attendance_time ? formatDateTime(r.attendance_time) : "",
-                        r.note || "",
+                        { v: index + 1, t: "n", s: centerCellStyle },
+                        { v: r.student?.student_code || "", t: "s", s: centerCellStyle },
+                        { v: r.student?.last_name || "", t: "s", s: cellStyle },
+                        { v: r.student?.first_name || "", t: "s", s: cellStyle },
+                        { v: r.student?.class?.name || r.student?.class?.class_code || "", t: "s", s: centerCellStyle },
+                        { v: isPresent ? "Có mặt" : "Vắng mặt", t: "s", s: centerCellStyle },
+                        { v: r.attendance_time ? formatDateTime(r.attendance_time) : "", t: "s", s: centerCellStyle },
+                        { v: r.note || "", t: "s", s: cellStyle },
                     ]);
                 });
 
                 const ws = XLSX.utils.aoa_to_sheet(aoaData);
                 
+                // Cập nhật font chữ Times New Roman cho tất cả các cell
+                for (const cell in ws) {
+                    if (cell[0] === '!') continue;
+                    if (!ws[cell].s) ws[cell].s = {};
+                    if (!ws[cell].s.font) ws[cell].s.font = {};
+                    ws[cell].s.font.name = "Times New Roman";
+                }
+
                 // Merge cell cho tiêu đề
                 ws["!merges"] = [
-                    { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }, // THÔNG TIN CA THI
-                    { s: { r: 6, c: 0 }, e: { r: 6, c: 6 } }  // THỐNG KÊ ĐIỂM DANH
+                    { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }, // THÔNG TIN CA THI
+                    { s: { r: 10, c: 2 }, e: { r: 10, c: 3 } }, // Merge "Họ và tên"
+                    { s: { r: 2, c: 1 }, e: { r: 2, c: 3 } },
+                    { s: { r: 3, c: 1 }, e: { r: 3, c: 3 } },
+                    { s: { r: 4, c: 1 }, e: { r: 4, c: 3 } },
+                    { s: { r: 5, c: 1 }, e: { r: 5, c: 3 } },
+                    { s: { r: 6, c: 1 }, e: { r: 6, c: 3 } },
+                    { s: { r: 7, c: 1 }, e: { r: 7, c: 3 } },
+                    { s: { r: 8, c: 1 }, e: { r: 8, c: 4 } }, // Giám thị
                 ];
 
-                ws['!cols'] = [{ wch: 15 }, { wch: 25 }, { wch: 30 }, { wch: 15 }, { wch: 30 }, { wch: 25 }, { wch: 20 }];
+                ws['!cols'] = [
+                    { wch: 12 }, // STT (rộng để cho label info)
+                    { wch: 13 }, // Mã SV
+                    { wch: 18 }, // Họ và tên đệm
+                    { wch: 8 },  // Tên
+                    { wch: 12 }, // Lớp
+                    { wch: 10 }, // Trạng thái
+                    { wch: 18 }, // Thời gian
+                    { wch: 16 }, // Ghi chú
+                ];
+                
+                ws['!rows'] = [];
+                ws['!rows'][8] = { hpt: 16 * Math.max(1, sch.supervisors?.length || 1) }; // row 8 height
+
+                // Setup trang in (Landscape = ngang)
+                ws['!pageSetup'] = { orientation: 'landscape', paperSize: 9 };
 
                 let sheetName = `${sch.subject?.subject_code || "M"}_P${sch.room?.room_code || "X"}_Ca${sch.group || 1}`;
                 if (sheetName.length > 31) sheetName = sheetName.substring(0, 31);
@@ -310,10 +378,10 @@ export default function ExamScheduleManagementPage() {
                 XLSX.utils.book_append_sheet(wb, ws, finalSheetName);
             }
 
-            XLSX.writeFile(wb, `CaThi_${periodToExport?.name || "DotThi"}.xlsx`);
+            XLSX.writeFile(wb, `CaThi_HK${semesterToExport?.semester_number}_${semesterToExport?.academic_year}.xlsx`);
             toast.success("Xuất dữ liệu thành công", { id: toastId, duration: 5000 });
             setExportModalOpen(false);
-            setExportSelectedPeriodId("");
+            setExportSelectedSemesterId("");
         } catch (err) {
             console.error(err);
             toast.error("Lỗi khi xuất dữ liệu", { id: toastId, duration: 5000 });
@@ -332,7 +400,7 @@ export default function ExamScheduleManagementPage() {
                 </div>
                 <div className="flex gap-2">
                     <Button variant="secondary" leftIcon="file-spreadsheet" onClick={() => setExportModalOpen(true)} className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300">Xuất Excel</Button>
-                    <Button variant="secondary" leftIcon="calendar-event" onClick={() => setPeriodManagerOpen(true)}>Đợt thi</Button>
+                    <Button variant="secondary" leftIcon="calendar-event" onClick={() => setSemesterManagerOpen(true)}>Học kì</Button>
                     <Button variant="secondary" leftIcon="upload" onClick={() => setImportModalOpen(true)}>Import Excel</Button>
                     <Button variant="primary" leftIcon="plus" onClick={() => handleOpenModal()}>Thêm lịch thi</Button>
                 </div>
@@ -343,17 +411,17 @@ export default function ExamScheduleManagementPage() {
                     <>
                         {/* Toolbar — Bộ lọc */}
                         <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 flex-wrap bg-slate-50/50 rounded-t-xl">
-                            {/* Lọc theo đợt thi */}
+                            {/* Lọc theo học kì */}
                             <div className="flex items-center gap-2">
-                                <label className="text-xs font-medium text-slate-500 whitespace-nowrap">Đợt thi:</label>
+                                <label className="text-xs font-medium text-slate-500 whitespace-nowrap">Học kì:</label>
                                 <select
-                                    value={selectedPeriodId}
-                                    onChange={(e) => setSelectedPeriodId(e.target.value)}
+                                    value={selectedSemesterId}
+                                    onChange={(e) => setSelectedSemesterId(e.target.value)}
                                     className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 max-w-[220px]"
                                 >
                                     <option value="">Tất cả</option>
-                                    {examPeriods.map((p) => (
-                                        <option key={p.id} value={p.id}>{p.name}</option>
+                                    {semesters.map((p) => (
+                                        <option key={p.id} value={p.id}>Học kì {p.semester_number} - {p.academic_year}</option>
                                     ))}
                                 </select>
                             </div>
@@ -392,8 +460,8 @@ export default function ExamScheduleManagementPage() {
                                     value={gridDate}
                                     onChange={setGridDate}
                                     highlightedDates={highlightedDates}
-                                    minDate={selectedPeriod ? toYMD(selectedPeriod.start_date) : undefined}
-                                    maxDate={selectedPeriod ? toYMD(selectedPeriod.end_date) : undefined}
+                                    minDate={selectedSemester ? toYMD(selectedSemester.start_date) : undefined}
+                                    maxDate={selectedSemester ? toYMD(selectedSemester.end_date) : undefined}
                                 />
                                 <Button
                                     variant="secondary"
@@ -418,16 +486,16 @@ export default function ExamScheduleManagementPage() {
                             </div>
                         </div>
 
-                        {/* Badge hiển thị khoảng ngày đợt thi */}
-                        {selectedPeriod && (
+                        {/* Badge hiển thị khoảng ngày học kì */}
+                        {selectedSemester && (
                             <div className="flex items-center gap-2 px-4 py-2 bg-blue-50/50 border-b border-blue-100 text-xs text-blue-700">
                                 <i className="ti ti-calendar-event text-sm" />
-                                <span className="font-medium">{selectedPeriod.name}</span>
+                                <span className="font-medium">Học kì {selectedSemester.semester_number} - {selectedSemester.academic_year}</span>
                                 <span className="text-blue-400">:</span>
                                 <span>
-                                    {new Date(selectedPeriod.start_date).toLocaleDateString("vi-VN")}
+                                    {new Date(selectedSemester.start_date).toLocaleDateString("vi-VN")}
                                     {"-"}
-                                    {new Date(selectedPeriod.end_date).toLocaleDateString("vi-VN")}
+                                    {new Date(selectedSemester.end_date).toLocaleDateString("vi-VN")}
                                 </span>
                             </div>
                         )}
@@ -481,40 +549,40 @@ export default function ExamScheduleManagementPage() {
                 onClose={() => setAttendanceRecordModal(null)}
                 onSuccess={fetchExamSchedules}
             />
-            <ExamPeriodManagerModal
-                open={periodManagerOpen}
-                onClose={() => setPeriodManagerOpen(false)}
-                onSuccess={fetchPeriods}
+            <SemesterManagerModal
+                open={semesterManagerOpen}
+                onClose={() => setSemesterManagerOpen(false)}
+                onSuccess={fetchSemesters}
             />
             <Modal
                 open={exportModalOpen}
                 onClose={() => setExportModalOpen(false)}
-                title="Chọn đợt thi để xuất Excel"
+                title="Chọn học kì để xuất Excel"
                 size="sm"
                 footer={
                     <>
                         <Button variant="secondary" onClick={() => setExportModalOpen(false)} disabled={isExporting}>Hủy</Button>
-                        <Button variant="primary" onClick={handleExportPeriod} disabled={!exportSelectedPeriodId || isExporting} loading={isExporting}>Xuất dữ liệu</Button>
+                        <Button variant="primary" onClick={handleExportPeriod} disabled={!exportSelectedSemesterId || isExporting} loading={isExporting}>Xuất dữ liệu</Button>
                     </>
                 }
             >
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Đợt thi <span className="text-red-500">*</span></label>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Học kì <span className="text-red-500">*</span></label>
                         <select
-                            value={exportSelectedPeriodId}
-                            onChange={(e) => setExportSelectedPeriodId(e.target.value)}
+                            value={exportSelectedSemesterId}
+                            onChange={(e) => setExportSelectedSemesterId(e.target.value)}
                             disabled={isExporting}
                             className="w-full h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60 disabled:bg-slate-100"
                         >
-                            <option value="" disabled>-- Chọn đợt thi --</option>
-                            {examPeriods.map((p) => (
-                                <option key={p.id} value={p.id}>{p.name}</option>
+                            <option value="" disabled>-- Chọn học kì --</option>
+                            {semesters.map((p) => (
+                                <option key={p.id} value={p.id}>Học kì {p.semester_number} - {p.academic_year}</option>
                             ))}
                         </select>
                     </div>
                     <p className="text-xs text-slate-500">
-                        Hệ thống sẽ tổng hợp toàn bộ ca thi của đợt thi được chọn và xuất ra một file Excel, mỗi ca thi là một Sheet.
+                        Hệ thống sẽ tổng hợp toàn bộ ca thi của học kì được chọn và xuất ra một file Excel, mỗi ca thi là một Sheet.
                     </p>
                 </div>
             </Modal>

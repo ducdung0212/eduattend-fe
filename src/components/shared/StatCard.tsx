@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils';
 // 1. Import các icon bạn cần dùng
-import { IconUsers, IconShield, IconSchool, IconUser, IconTrendingUp, IconTrendingDown } from '@tabler/icons-react';
+import { IconTrendingUp, IconTrendingDown } from '@tabler/icons-react';
 
 interface StatCardProps {
   label: string;

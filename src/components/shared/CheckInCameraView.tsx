@@ -8,7 +8,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { useFaceDetectionCamera } from "@/hooks/useFaceDetectionCamera";
 import { Modal } from "@/components/ui/Modal";
-import { SearchBar } from "./SearchBar";
+import { Input } from "@/components/ui/Input";
 import { Scanner } from '@yudiel/react-qr-scanner';
 
 interface Props {
@@ -34,8 +34,8 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
 
     // ── Tìm kiếm SV trong ngày ──────────────────────
     const [studentSearch, setStudentSearch] = useState("");
-    const [studentSearchResults, setStudentSearchResults] = useState<ExamSchedule[]>([]);
     const [searchingStudent, setSearchingStudent] = useState(false);
+    const [lookupResult, setLookupResult] = useState<{ type: 'success' | 'error' | 'info', message: string } | null>(null);
     const [activeTab, setActiveTab] = useState<"face" | "qr">("face");
     const [isScanningQR, setIsScanningQR] = useState(true);
 
@@ -60,31 +60,56 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
     const endDate = new Date(new Date(schedule.start_time).getTime() + (schedule.duration ?? 120) * 60000);
     const endStr = formatTime(endDate);
 
-    useEffect(() => {
-        if (!studentSearch.trim()) {
-            setStudentSearchResults([]);
-            return;
-        }
-        const t = setTimeout(async () => {
-            setSearchingStudent(true);
-            try {
-                const today = todayString();
-                const res = await api.get("/exam-schedules", {
-                    params: {
-                        start_time: today,
-                        search: studentSearch,
-                        limit: 50,
-                    },
+    const handleLookup = async () => {
+        const code = studentSearch.trim().toUpperCase();
+        if (!code) return;
+
+        setSearchingStudent(true);
+        setLookupResult(null);
+        try {
+            const res = await api.get("/exam-schedules", {
+                params: {
+                    start_time: todayString(),
+                    student_code: code,
+                    limit: 50,
+                },
+            });
+            const schedules = res.data?.data || [];
+            
+            if (schedules.length === 0) {
+                setLookupResult({
+                    type: 'error',
+                    message: `Sinh viên ${code} không có lịch thi nào trong hôm nay.`
                 });
-                setStudentSearchResults(res.data?.data ?? []);
-            } catch {
-                console.error("Lỗi khi tìm kiếm sinh viên");
-            } finally {
-                setSearchingStudent(false);
+            } else {
+                const isThisRoom = schedules.some((s: any) => s.id === schedule.id);
+                
+                const scheduleDetails = schedules.map((s: any) => {
+                    const timeStr = formatTime(s.start_time);
+                    return `môn ${s.subject?.name} lúc ${timeStr} tại phòng ${s.room?.name || ''}`;
+                }).join(', ');
+
+                if (isThisRoom) {
+                    setLookupResult({
+                        type: 'success',
+                        message: `Sinh viên ${code} ĐÚNG PHÒNG. Các ca thi hôm nay: ${scheduleDetails}.`
+                    });
+                } else {
+                    setLookupResult({
+                        type: 'info',
+                        message: `Sinh viên ${code} ĐI NHẦM PHÒNG. Lịch thi hôm nay: ${scheduleDetails}.`
+                    });
+                }
             }
-        }, 400);
-        return () => clearTimeout(t);
-    }, [studentSearch]);
+        } catch (err) {
+            setLookupResult({
+                type: 'error',
+                message: 'Có lỗi xảy ra khi tra cứu.'
+            });
+        } finally {
+            setSearchingStudent(false);
+        }
+    };
 
     // Bật camera khi modal mở
     useEffect(() => {
@@ -257,14 +282,17 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
             setResults((prev) => [result, ...prev]);
         };
 
-        const handleScanQR = async (text: string) => {
-            if (!isScanningQR) return;
+        const handleScanQR = async (text: string, isManual = false) => {
+            if (!isScanningQR && !isManual) return;
             
-            const match = text.match(/(DH|LT)\d{8}/i);
-            if (!match) return;
+            let student_code = text.trim().toUpperCase();
+            if (!isManual) {
+                const match = text.match(/(DH|LT)\d{8}/i);
+                if (!match) return;
+                student_code = match[0].toUpperCase();
+            }
 
-            const student_code = match[0].toUpperCase();
-            setIsScanningQR(false);
+            if (!isManual) setIsScanningQR(false);
 
             try {
                 const res = await api.post(`/attendance-records/check-in/qr`, {
@@ -395,55 +423,50 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
                             )}
                         </div>
 
-                        {/* Tìm kiếm SV trong ngày */}
+                        {/* Tra cứu SV thủ công */}
                         <div className="bg-white border border-slate-200/70 rounded-xl overflow-hidden">
                             <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
                                 <i className="ti ti-search text-violet-600" />
-                                <h4 className="text-sm font-semibold text-slate-900">Tra cứu sinh viên trong ngày</h4>
+                                <h4 className="text-sm font-semibold text-slate-900">Tra cứu thông tin ca thi sinh viên</h4>
                             </div>
                             <div className="p-4 space-y-3">
-                                <SearchBar
-                                    value={studentSearch}
-                                    onChange={setStudentSearch}
-                                    placeholder="Nhập mã SV hoặc tên để xem thuộc ca thi nào..."
-                                    className="max-w-full"
-                                />
-
-                                {searchingStudent && (
-                                    <div className="text-sm text-slate-400 text-center py-2 flex items-center justify-center gap-2">
-                                        <span className="w-4 h-4 border-2 border-slate-200 border-t-blue-500 rounded-full animate-spin" />
-                                        Đang tìm kiếm...
-                                    </div>
-                                )}
-
-                                {!searchingStudent && studentSearch.trim() && studentSearchResults.length === 0 && (
-                                    <div className="text-sm text-slate-400 text-center py-2">
-                                        Không tìm thấy kết quả cho "{studentSearch}"
-                                    </div>
-                                )}
-
-                                {studentSearchResults.length > 0 && (
-                                    <div className="space-y-2">
-                                        {studentSearchResults.map((s) => {
-                                            const sStart = formatTime(s.start_time);
-                                            const sEnd = formatTime(new Date(new Date(s.start_time).getTime() + (s.duration ?? 120) * 60000));
-                                            return (
-                                                <div key={s.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-slate-50 border border-slate-100 text-sm">
-                                                    <div className="w-8 h-8 rounded-full bg-violet-50 flex items-center justify-center shrink-0">
-                                                        <i className="ti ti-book text-violet-600 text-sm" />
-                                                    </div>
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="font-medium text-slate-900 truncate">{s.subject?.name}</div>
-                                                        <div className="text-xs text-slate-500">
-                                                            {s.subject?.subject_code} · Nhóm {s.group} · Phòng {s.room?.name} · {sStart} – {sEnd}
-                                                        </div>
-                                                    </div>
-                                                    <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 shrink-0">
-                                                        {s.attendance_count ?? 0} SV
-                                                    </span>
-                                                </div>
-                                            );
-                                        })}
+                                <div className="flex gap-3">
+                                    <Input
+                                        value={studentSearch}
+                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setStudentSearch(e.target.value)}
+                                        placeholder="Nhập mã số sinh viên (VD: DH520...)"
+                                        className="flex-1"
+                                        onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                handleLookup();
+                                            }
+                                        }}
+                                    />
+                                    <Button
+                                        variant="primary"
+                                        disabled={!studentSearch.trim()}
+                                        loading={searchingStudent}
+                                        onClick={handleLookup}
+                                    >
+                                        Tra cứu
+                                    </Button>
+                                </div>
+                                
+                                {lookupResult && (
+                                    <div className={`p-3 rounded-lg border text-sm ${
+                                        lookupResult.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' :
+                                        lookupResult.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' :
+                                        'bg-amber-50 border-amber-200 text-amber-800'
+                                    }`}>
+                                        <div className="flex items-start gap-2">
+                                            <i className={`ti mt-0.5 ${
+                                                lookupResult.type === 'success' ? 'ti-check text-emerald-600' :
+                                                lookupResult.type === 'error' ? 'ti-x text-red-600' :
+                                                'ti-info-circle text-amber-600'
+                                            }`} />
+                                            <div>{lookupResult.message}</div>
+                                        </div>
                                     </div>
                                 )}
                             </div>

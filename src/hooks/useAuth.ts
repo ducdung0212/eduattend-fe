@@ -23,7 +23,9 @@ export function useAuth(): UseAuthReturn {
   // Đọc session từ localStorage khi component mount
   useEffect(() => {
     const current = getCurrentUser();
+    // eslint-disable-next-line
     setUser(current);
+    // eslint-disable-next-line
     setInitializing(false);
   }, []);
 

@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import api from "@/lib/api";
 import { fromVNDatetimeLocalToUTC, toVNDatetimeLocal, toYMD } from "@/lib/utils";
-import { ExamPeriod, ExamSchedule, Room, Subject } from "@/types";
+import { Semester, ExamSchedule, Room, Subject } from "@/types";
 import React, { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import toast from "react-hot-toast";
 import dayjs from "dayjs";
@@ -54,7 +54,7 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
         duration: 0,
         room_code: "",
         note: "",
-        exam_period_id: "",
+        semester_id: "",
     });
 
     // Tách ngày/giờ để UI dễ nhập hơn datetime-local gộp
@@ -63,10 +63,10 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
 
     const [submitting, setSubmitting] = useState(false);
 
-    // --- Đợt thi ---
-    const [examPeriods, setExamPeriods] = useState<ExamPeriod[]>([]);
+    // --- Học kì ---
+    const [semesters, setSemesters] = useState<Semester[]>([]);
     const [loadingPeriods, setLoadingPeriods] = useState(false);
-    const [selectedPeriod, setSelectedPeriod] = useState<ExamPeriod | null>(null);
+    const [selectedPeriod, setSelectedPeriod] = useState<Semester | null>(null);
 
     // --- Date chips ---
     const dateRange = useMemo(() => {
@@ -102,14 +102,14 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
-    // --- Fetch đợt thi ---
+    // --- Fetch học kì ---
     const fetchPeriods = useCallback(async () => {
         setLoadingPeriods(true);
         try {
-            const res = await api.get("/exam-periods", { params: { limit: 100 } });
-            setExamPeriods(res.data?.data || []);
+            const res = await api.get("/semesters", { params: { limit: 100 } });
+            setSemesters(res.data?.data || []);
         } catch {
-            console.error("Lỗi tải đợt thi");
+            console.error("Lỗi tải học kì");
         } finally {
             setLoadingPeriods(false);
         }
@@ -157,7 +157,7 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
                     duration: examSchedule.duration ?? 0,
                     room_code: examSchedule.room?.room_code ?? "",
                     note: examSchedule.note ?? "",
-                    exam_period_id: examSchedule.exam_period?.id ?? "",
+                    semester_id: examSchedule.semester?.id ?? "",
                 });
                 setExamDate(datePart ?? "");
                 setExamTime(timePart ?? "");
@@ -173,8 +173,8 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
                 );
 
                 // Set selected period for editing
-                if (examSchedule.exam_period) {
-                    setSelectedPeriod(examSchedule.exam_period);
+                if (examSchedule.semester) {
+                    setSelectedPeriod(examSchedule.semester);
                 } else {
                     setSelectedPeriod(null);
                 }
@@ -186,7 +186,7 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
                     duration: 0,
                     room_code: "",
                     note: "",
-                    exam_period_id: "",
+                    semester_id: "",
                 });
                 setExamDate("");
                 setExamTime("");
@@ -219,7 +219,13 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
         setIsSearchingSubject(true);
         try {
             const res = await api.get("/subjects", {
-                params: { search: subjectSearch, limit: 10 },
+                params: { 
+                    search: subjectSearch, 
+                    limit: 10,
+                    semester: (selectedPeriod?.semester_number === 1 || selectedPeriod?.semester_number === 2) 
+                        ? selectedPeriod.semester_number 
+                        : undefined
+                },
             });
             setSubjects(res.data?.data || []);
         } catch (error) {
@@ -227,23 +233,24 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
         } finally {
             setIsSearchingSubject(false);
         }
-    }, [subjectSearch, showSubjectDropdown]);
+    }, [subjectSearch, showSubjectDropdown, selectedPeriod]);
 
     useEffect(() => {
         const t = setTimeout(fetchSubjects, subjectSearch ? 400 : 0);
         return () => clearTimeout(t);
     }, [fetchSubjects, subjectSearch]);
 
-    // --- Chọn đợt thi ---
+    // --- Chọn học kì ---
     const handleSelectPeriod = (periodId: string) => {
-        const period = examPeriods.find((p) => p.id === periodId) ?? null;
+        const period = semesters.find((p) => p.id === periodId) ?? null;
         setSelectedPeriod(period);
-        setFormData((prev) => ({ ...prev, exam_period_id: periodId }));
-        // Reset ngày + phòng khi đổi đợt thi
+        setFormData((prev) => ({ ...prev, semester_id: periodId }));
+        // Reset ngày + phòng + môn khi đổi học kì
         setExamDate("");
         setExamTime("");
-        setFormData((prev) => ({ ...prev, room_code: "" }));
+        setFormData((prev) => ({ ...prev, room_code: "", subject_code: "" }));
         setRoomSearch("");
+        setSubjectSearch("");
     };
 
     // --- Chọn ngày thi (date chip) ---
@@ -275,7 +282,7 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
             const payload = {
                 ...formData,
                 start_time: fromVNDatetimeLocalToUTC(formData.start_time),
-                exam_period_id: formData.exam_period_id || undefined,
+                semester_id: formData.semester_id || undefined,
             };
             if (examSchedule) {
                 await api.patch(`/exam-schedules/${examSchedule.id}`, payload);
@@ -315,11 +322,11 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
         >
             <form id="exam-schedule-form" onSubmit={handleSubmit} className="space-y-5">
 
-                {/* ══════════ STEP 1: Chọn đợt thi ══════════ */}
+                {/* ══════════ STEP 1: Chọn học kì ══════════ */}
                 <div className="flex flex-col gap-1.5">
                     <label className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
                         <i className="ti ti-calendar-event text-sm text-slate-400" />
-                        Đợt thi
+                        Học kì
                     </label>
                     {loadingPeriods ? (
                         <div className="flex items-center gap-2 text-sm text-slate-400 py-2">
@@ -329,14 +336,14 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
                     ) : (
                         <select
                             required
-                            value={formData.exam_period_id}
+                            value={formData.semester_id}
                             onChange={(e) => handleSelectPeriod(e.target.value)}
                             className="w-full rounded-lg border text-sm text-slate-900 bg-white h-9 px-3 outline-none transition-colors border-slate-200 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
                         >
-                            <option value="">— Chọn đợt thi —</option>
-                            {examPeriods.map((p) => (
+                            <option value="">— Chọn học kì —</option>
+                            {semesters.map((p) => (
                                 <option key={p.id} value={p.id}>
-                                    {p.name}
+                                    Học kì {p.semester_number} - {p.academic_year}
                                 </option>
                             ))}
                         </select>
@@ -490,8 +497,12 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
                                 setShowSubjectDropdown(true);
                                 if (e.target.value === "") setFormData((prev) => ({ ...prev, subject_code: "" }));
                             }}
-                            className="w-full rounded-lg border text-sm text-slate-900 bg-white h-9 px-3 outline-none transition-colors border-slate-200 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+                            disabled={!selectedPeriod}
+                            className={`w-full rounded-lg border text-sm text-slate-900 bg-white h-9 px-3 outline-none transition-colors border-slate-200 focus:border-slate-400 focus:ring-2 focus:ring-slate-100 ${!selectedPeriod ? 'opacity-50 cursor-not-allowed bg-slate-50' : ''}`}
                         />
+                        {!selectedPeriod && (
+                            <p className="text-xs text-orange-500 mt-1">Vui lòng chọn học kì trước</p>
+                        )}
                         {isSearchingSubject && (
                             <div className="absolute right-3 top-2.5">
                                 <span className="w-4 h-4 rounded-full border-2 border-slate-200 border-t-blue-500 animate-spin inline-block" />

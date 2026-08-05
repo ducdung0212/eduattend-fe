@@ -6,7 +6,7 @@ import { DataTable, Column } from "@/components/shared/DataTable";
 import { usePagination } from "@/hooks/usePagination";
 import { useAuth } from "@/hooks/useAuth";
 import api from "@/lib/api";
-import { ExamSchedule, PaginationMeta } from "@/types";
+import { ExamSchedule, PaginationMeta, Semester } from "@/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { formatTime, getDayOfWeekVN, formatDateShort } from "@/lib/utils";
@@ -43,6 +43,8 @@ export default function ExamSchedulePage() {
     const [meta, setMeta] = useState<PaginationMeta | null>(null);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
+    const [semesters, setSemesters] = useState<Semester[]>([]);
+    const [selectedSemesterId, setSelectedSemesterId] = useState("");
 
     const { page, setPage } = usePagination(meta?.totalPages ?? 1);
 
@@ -159,6 +161,7 @@ export default function ExamSchedulePage() {
                     page,
                     limit: LIMIT,
                     search: search || undefined,
+                    semester_id: selectedSemesterId || undefined,
                     lecturer_code: user.lecturer_code,
                 },
             });
@@ -170,7 +173,19 @@ export default function ExamSchedulePage() {
         } finally {
             setLoading(false);
         }
-    }, [page, search, user?.lecturer_code]);
+    }, [page, search, selectedSemesterId, user?.lecturer_code]);
+
+    useEffect(() => {
+        api.get("/semesters", { params: { limit: 100 } })
+            .then((res) => {
+                const data = res.data?.data || [];
+                setSemesters(data);
+                if (data.length > 0) {
+                    setSelectedSemesterId(data[0].id);
+                }
+            })
+            .catch(console.error);
+    }, []);
 
     useEffect(() => {
         if (initializing) return;
@@ -180,7 +195,7 @@ export default function ExamSchedulePage() {
         }
         const t = setTimeout(fetchExamSchedules, search ? 400 : 0);
         return () => clearTimeout(t);
-    }, [fetchExamSchedules, search, user?.lecturer_code, initializing]);
+    }, [fetchExamSchedules, search, selectedSemesterId, user?.lecturer_code, initializing]);
 
     return (
         <div className="space-y-4">
@@ -205,6 +220,15 @@ export default function ExamSchedulePage() {
                         placeholder="Tìm theo môn, phòng thi..."
                         className="flex-1 min-w-[200px] max-w-md"
                     />
+                    <select
+                        className="h-10 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-shadow min-w-[150px]"
+                        value={selectedSemesterId}
+                        onChange={(e) => setSelectedSemesterId(e.target.value)}
+                    >
+                        {semesters.map((p) => (
+                            <option key={p.id} value={p.id}>Học kì {p.semester_number} - {p.academic_year}</option>
+                        ))}
+                    </select>
                     {!loading && meta && (
                         <span className="text-xs text-slate-400 ml-auto">
                             {meta.total} ca thi

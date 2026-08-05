@@ -45,7 +45,7 @@ export function useFaceDetectionCamera(initialFacingMode: "user" | "environment"
                         runningMode: "VIDEO",
                         minDetectionConfidence: 0.4
                     });
-                } catch (err) {
+                } catch {
                     detector = await FaceDetector.createFromOptions(vision, {
                         baseOptions: {
                             modelAssetPath: "/models/blaze_face_full_range.tflite",
@@ -78,7 +78,6 @@ export function useFaceDetectionCamera(initialFacingMode: "user" | "environment"
 
     const stopCamera = useCallback(() => {
         if (videoFrameRef.current && videoRef.current && 'cancelVideoFrameCallback' in videoRef.current) {
-            // @ts-ignore
             videoRef.current.cancelVideoFrameCallback(videoFrameRef.current);
             videoFrameRef.current = null;
         }
@@ -182,7 +181,6 @@ export function useFaceDetectionCamera(initialFacingMode: "user" | "environment"
             }
 
             if ('requestVideoFrameCallback' in video) {
-                // @ts-ignore
                 videoFrameRef.current = video.requestVideoFrameCallback(detectLoop);
             } else {
                 animationFrameRef.current = requestAnimationFrame(() => detectLoop(performance.now()));
@@ -190,12 +188,11 @@ export function useFaceDetectionCamera(initialFacingMode: "user" | "environment"
         };
 
         if ('requestVideoFrameCallback' in video) {
-            // @ts-ignore
             videoFrameRef.current = video.requestVideoFrameCallback(detectLoop);
         } else {
             animationFrameRef.current = requestAnimationFrame(() => detectLoop(performance.now()));
         }
-    }, [facingMode]);
+    }, [facingMode, getValidTimestamp]);
 
     const detectFacesCurrentFrame = useCallback((): Detection[] => {
         if (!videoRef.current || !detectorRef.current) return [];

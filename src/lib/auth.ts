@@ -24,7 +24,7 @@ export function getCookie(name: string): string | null {
 
 // ── Đăng nhập ────────────────────────────────────────────────
 export async function login(payload: LoginPayload): Promise<LoginResponse> {
-  const { data: resData } = await api.post<any>(
+  const { data: resData } = await api.post<{ data: { access_token: string; refresh_token: string; user: User } }>(
     '/auth/login',
     payload,
   );
@@ -48,7 +48,7 @@ export async function login(payload: LoginPayload): Promise<LoginResponse> {
 }
 
 export async function loginFace(payload: LoginFacePayload): Promise<LoginResponse> {
-  const { data: resData } = await api.post<any>(
+  const { data: resData } = await api.post<{ data: { access_token: string; refresh_token: string; user: User } }>(
     '/auth/login-face',
     payload,
   );
@@ -99,7 +99,7 @@ export function getSession(): AuthSession | null {
 export function parseJwt(token: string) {
   try {
     return JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-  } catch (e) {
+  } catch {
     return null;
   }
 }

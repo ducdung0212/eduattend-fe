@@ -36,6 +36,7 @@ export function ImportModal({
     // Reset file khi mở lại modal
     useEffect(() => {
         if (open) {
+            // eslint-disable-next-line react-hooks/rules-of-hooks, react-hooks/exhaustive-deps
             setFile(null);
         }
     }, [open]);
@@ -53,6 +54,7 @@ export function ImportModal({
             const firstSheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[firstSheetName];
 
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const data: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
             if (data.length > 0) {
@@ -76,26 +78,30 @@ export function ImportModal({
                 }
             });
 
+            const newData: any[][] = [];
+            if (data.length > 0) {
+                newData.push(data[0]); // Push header
+            }
+
             for (let i = 1; i < data.length; i++) {
-                while (data[i].length < errorColIndex) {
-                    data[i].push("");
-                }
                 if (errorMap.has(i)) {
+                    while (data[i].length < errorColIndex) {
+                        data[i].push("");
+                    }
                     data[i][errorColIndex] = errorMap.get(i);
-                } else {
-                    data[i][errorColIndex] = "";
+                    newData.push(data[i]);
                 }
             }
 
             if (generalErrors.length > 0) {
-                data.push([]);
-                data.push(["Các lỗi chung không xác định dòng:"]);
+                newData.push([]);
+                newData.push(["Các lỗi chung không xác định dòng:"]);
                 generalErrors.forEach(err => {
-                    data.push([err]);
+                    newData.push([err]);
                 });
             }
 
-            const newWorksheet = XLSX.utils.aoa_to_sheet(data);
+            const newWorksheet = XLSX.utils.aoa_to_sheet(newData);
             const newWorkbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(newWorkbook, newWorksheet, "Errors");
 
@@ -137,6 +143,7 @@ export function ImportModal({
             }
             onSuccess();
             onClose();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (err: any) {
             const msg = err.response?.data?.message || "Lỗi khi import dữ liệu";
             toast.error(Array.isArray(msg) ? msg.join(", ") : msg);

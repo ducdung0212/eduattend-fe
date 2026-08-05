@@ -11,6 +11,7 @@ import { ExamSchedule, AttendanceRecord } from "@/types";
 import { useCallback, useEffect, useState, useMemo } from "react";
 import toast from "react-hot-toast";
 import * as XLSX from "xlsx";
+import { ImportModal } from "@/components/shared/ImportModal";
 
 interface AttendanceRecordModalProps {
     open: boolean;
@@ -28,6 +29,7 @@ export function AttendanceRecordModal({ open, examSchedule, onClose, onSuccess }
     const [search, setSearch] = useState("");
     const [codesInput, setCodesInput] = useState("");
     const [submitting, setSubmitting] = useState(false);
+    const [importModalOpen, setImportModalOpen] = useState(false);
 
     const examScheduleId = examSchedule?.id;
 
@@ -254,6 +256,14 @@ export function AttendanceRecordModal({ open, examSchedule, onClose, onSuccess }
                         >
                             Thêm
                         </Button>
+                        <Button
+                            variant="secondary"
+                            leftIcon="upload"
+                            onClick={() => setImportModalOpen(true)}
+                            className="self-stretch whitespace-nowrap"
+                        >
+                            Import Excel
+                        </Button>
                     </div>
                 </div>
 
@@ -304,6 +314,18 @@ export function AttendanceRecordModal({ open, examSchedule, onClose, onSuccess }
                     />
                 )}
             </div>
+
+            <ImportModal
+                open={importModalOpen}
+                onClose={() => setImportModalOpen(false)}
+                onSuccess={() => {
+                    setImportModalOpen(false);
+                    fetchRecords();
+                    onSuccess?.();
+                }}
+                title="Import danh sách sinh viên"
+                endpoint={examScheduleId ? `/attendance-records/import/${examScheduleId}` : ""}
+            />
         </Modal>
     );
 }

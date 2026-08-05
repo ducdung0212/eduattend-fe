@@ -53,6 +53,7 @@ export interface Class {
 export interface Subject {
   subject_code: string;
   name: string;
+  semester?: number;
 }
 export interface Student {
   student_code: string;
@@ -81,9 +82,10 @@ export interface Room {
   capacity: number;
 }
 
-export interface ExamPeriod {
+export interface Semester {
   id: string;
-  name: string;
+  academic_year: string;
+  semester_number: number;
   start_date: string;
   end_date: string;
   exam_schedule_count?: number;
@@ -113,7 +115,7 @@ export interface ExamSchedule {
   attendance_count: number;
   supervisors: string[];
   note: string;
-  exam_period?: ExamPeriod;
+  semester?: Semester;
   class_breakdown?: ClassBreakdown[];
 }
 

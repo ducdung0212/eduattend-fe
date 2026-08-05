@@ -1,6 +1,6 @@
 "use client";
 
-import { ExamSchedule, ExamPeriod, PaginationMeta } from "@/types";
+import { ExamSchedule, Semester, PaginationMeta } from "@/types";
 import { Pagination } from "@/components/shared/Pagination";
 import { usePagination } from "@/hooks/usePagination";
 import { formatTime } from "@/lib/utils";
@@ -36,17 +36,17 @@ export function OngoingExamCards({ onSelectSchedule, lecturerCode, variant = "ad
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
 
-    // Đợt thi
-    const [examPeriods, setExamPeriods] = useState<ExamPeriod[]>([]);
-    const [selectedPeriodId, setSelectedPeriodId] = useState("");
+    // Học kì
+    const [semesters, setSemesters] = useState<Semester[]>([]);
+    const [selectedSemesterId, setSelectedSemesterId] = useState("");
 
     const [meta, setMeta] = useState<PaginationMeta | null>(null);
     const { page, setPage, reset: resetPage } = usePagination(meta?.totalPages ?? 1);
 
-    // Fetch đợt thi
+    // Fetch học kì
     useEffect(() => {
-        api.get("/exam-periods", { params: { limit: 100 } })
-            .then((res) => setExamPeriods(res.data?.data || []))
+        api.get("/semesters", { params: { limit: 100 } })
+            .then((res) => setSemesters(res.data?.data || []))
             .catch(() => { });
     }, []);
 
@@ -56,7 +56,7 @@ export function OngoingExamCards({ onSelectSchedule, lecturerCode, variant = "ad
             const res = await api.get("/exam-schedules/ongoing", {
                 params: {
                     search: search || undefined,
-                    exam_period_id: selectedPeriodId || undefined,
+                    semester_id: selectedSemesterId || undefined,
                     lecturer_code: lecturerCode || undefined,
                     page,
                     limit: 12,
@@ -70,12 +70,12 @@ export function OngoingExamCards({ onSelectSchedule, lecturerCode, variant = "ad
         } finally {
             setLoading(false);
         }
-    }, [search, selectedPeriodId, page, lecturerCode]);
+    }, [search, selectedSemesterId, page, lecturerCode]);
 
-    // Reset trang về 1 khi search hoặc selectedPeriodId thay đổi
+    // Reset trang về 1 khi search hoặc selectedSemesterId thay đổi
     useEffect(() => {
         resetPage();
-    }, [search, selectedPeriodId, resetPage]);
+    }, [search, selectedSemesterId, resetPage]);
 
     // Debounce search
     useEffect(() => {
@@ -97,15 +97,15 @@ export function OngoingExamCards({ onSelectSchedule, lecturerCode, variant = "ad
                         className="flex-1 min-w-[240px] max-w-md"
                     />
                     <div className="flex items-center gap-2">
-                        <label className="text-xs font-medium text-slate-500 whitespace-nowrap">Đợt thi:</label>
+                        <label className="text-xs font-medium text-slate-500 whitespace-nowrap">Học kì:</label>
                         <select
-                            value={selectedPeriodId}
-                            onChange={(e) => setSelectedPeriodId(e.target.value)}
+                            value={selectedSemesterId}
+                            onChange={(e) => setSelectedSemesterId(e.target.value)}
                             className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 max-w-[220px]"
                         >
                             <option value="">Tất cả</option>
-                            {examPeriods.map((p) => (
-                                <option key={p.id} value={p.id}>{p.name}</option>
+                            {semesters.map((p) => (
+                                <option key={p.id} value={p.id}>Học kì {p.semester_number} - {p.academic_year}</option>
                             ))}
                         </select>
                     </div>

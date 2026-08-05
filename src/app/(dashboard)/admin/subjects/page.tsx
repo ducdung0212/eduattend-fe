@@ -25,6 +25,7 @@ export default function SubjectManagementPage() {
     const [meta, setMeta] = useState<PaginationMeta | null>(null);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
+    const [semesterFilter, setSemesterFilter] = useState<string>("");
 
     const { page, setPage, reset: resetPage } = usePagination(meta?.totalPages ?? 1);
 
@@ -35,7 +36,8 @@ export default function SubjectManagementPage() {
                 params: {
                     page,
                     limit: LIMIT,
-                    search: search || undefined
+                    search: search || undefined,
+                    semester: semesterFilter !== "" ? (semesterFilter === "null" ? "null" : Number(semesterFilter)) : undefined
                 }
             });
             setSubjects(res.data?.data ?? []);
@@ -46,7 +48,7 @@ export default function SubjectManagementPage() {
         } finally {
             setLoading(false);
         }
-    }, [page, search]);
+    }, [page, search, semesterFilter]);
 
     useEffect(() => {
         const t = setTimeout(fetchSubjects, search ? 400 : 0);
@@ -126,6 +128,15 @@ export default function SubjectManagementPage() {
             )
         },
         {
+            key: "semester",
+            label: "Học kì",
+            render: (s) => (
+                <span className="text-slate-700">
+                    {s.semester ? `Học kì ${s.semester}` : <span className="text-slate-400">Chưa quy định</span>}
+                </span>
+            )
+        },
+        {
             key: "actions",
             label: "Thao tác",
             align: "right",
@@ -170,6 +181,19 @@ export default function SubjectManagementPage() {
                         placeholder="Tìm theo mã môn học hoặc tên môn học..."
                         className="flex-1 min-w-48"
                     />
+                    <select
+                        value={semesterFilter}
+                        onChange={(e) => {
+                            setSemesterFilter(e.target.value);
+                            resetPage();
+                        }}
+                        className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                    >
+                        <option value="">Tất cả học kì</option>
+                        <option value="1">Học kì 1</option>
+                        <option value="2">Học kì 2</option>
+                        <option value="null">Chưa quy định</option>
+                    </select>
                     {selectedKeys.length > 0 && (
                         <div className="ml-auto">
                             <Button variant="danger" size="sm" leftIcon="trash" onClick={handleBulkDelete} loading={bulkDeleting}>

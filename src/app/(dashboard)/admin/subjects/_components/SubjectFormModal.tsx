@@ -14,15 +14,15 @@ interface SubjectFormModalProps {
 }
 
 export function SubjectFormModal({ open, subject, onClose, onSuccess }: SubjectFormModalProps) {
-    const [formData, setFormData] = useState({ subject_code: "", name: "" });
+    const [formData, setFormData] = useState({ subject_code: "", name: "", semester: "" as string | number });
     const [submitting, setSubmitting] = useState(false);
 
     useEffect(() => {
         if (open) {
             if (subject) {
-                setFormData({ subject_code: subject.subject_code, name: subject.name });
+                setFormData({ subject_code: subject.subject_code, name: subject.name, semester: subject.semester ?? "" });
             } else {
-                setFormData({ subject_code: "", name: "" });
+                setFormData({ subject_code: "", name: "", semester: "" });
             }
         }
     }, [open, subject]);
@@ -31,12 +31,15 @@ export function SubjectFormModal({ open, subject, onClose, onSuccess }: SubjectF
         e.preventDefault();
         setSubmitting(true);
         try {
+            const payload = { 
+                ...formData, 
+                semester: formData.semester ? Number(formData.semester) : null 
+            };
             if (subject) {
-                const payload = { name: formData.name };
-                await api.patch(`/subjects/${subject.subject_code}`, payload);
+                await api.patch(`/subjects/${subject.subject_code}`, { name: payload.name, semester: payload.semester });
                 toast.success('Cập nhật môn học thành công');
             } else {
-                await api.post('/subjects', formData);
+                await api.post('/subjects', payload);
                 toast.success("Thêm môn học thành công");
             }
             onSuccess();
@@ -78,6 +81,20 @@ export function SubjectFormModal({ open, subject, onClose, onSuccess }: SubjectF
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     required
                 />
+                <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-slate-700">
+                        Học kì
+                    </label>
+                    <select
+                        value={formData.semester}
+                        onChange={(e) => setFormData({ ...formData, semester: e.target.value })}
+                        className="w-full rounded-lg border text-sm text-slate-900 bg-white h-9 px-3 outline-none transition-colors border-slate-200 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+                    >
+                        <option value="">-- Chưa quy định --</option>
+                        <option value="1">Học kì 1</option>
+                        <option value="2">Học kì 2</option>
+                    </select>
+                </div>
             </form>
         </Modal>
     );

@@ -13,7 +13,7 @@ import { formatTime, formatDateTime, cn, formatDateVN, toYMD } from "@/lib/utils
 import { ExamSchedule, AttendanceRecord, ExamSupervisor, RekognitionResult, AttendanceStatus } from "@/types";
 import { useCallback, useEffect, useState, useMemo } from "react";
 import toast from "react-hot-toast";
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
 
 interface Props {
     schedule: ExamSchedule;
@@ -145,27 +145,6 @@ export function ExamDetailView({ schedule, onBack, hideAttendanceButton }: Props
     const { page, limit, setPage } = usePagination(totalPages, { initialLimit: 20 });
     const paginatedRecords = filteredRecords.slice((page - 1) * limit, page * limit);
 
-    // Thay đổi trạng thái điểm danh thủ công
-    const handleUpdateStatus = async (record: AttendanceRecord, newStatus: AttendanceStatus) => {
-        const isPresentOrLate = newStatus === 'present' || newStatus === 'late';
-        const newTime = (isPresentOrLate && !record.attendance_time) ? new Date().toISOString() : (!isPresentOrLate ? null : record.attendance_time);
-        
-        // Optimistic update: cập nhật state ngay lập tức để giao diện phản hồi nhanh
-        setRecords(prev => prev.map(r => r.id === record.id ? { ...r, status: newStatus, attendance_time: newTime as any } : r));
-
-        try {
-            await api.patch(`/attendance-records/${record.id}`, {
-                status: newStatus,
-                attendance_time: newTime,
-            });
-            toast.success("Đã cập nhật trạng thái");
-        } catch (err: any) {
-            // Rollback nếu API thất bại
-            setRecords(prev => prev.map(r => r.id === record.id ? { ...r, status: record.status, attendance_time: record.attendance_time } : r));
-            toast.error("Không thể cập nhật trạng thái");
-        }
-    };
-
     // Cập nhật ghi chú
     const handleUpdateNote = async (record: AttendanceRecord, newNote: string) => {
         if (record.note === newNote) return;
@@ -203,66 +182,139 @@ export function ExamDetailView({ schedule, onBack, hideAttendanceButton }: Props
         });
 
         let present = 0;
-        let late = 0;
-        let excused = 0;
         let absent = 0;
 
         exportRecords.forEach((r) => {
-            const currentStatus = r.status || (r.attendance_time ? "present" : "absent");
+            const currentStatus = r.attendance_time ? "present" : "absent";
             if (currentStatus === "present") present++;
-            else if (currentStatus === "late") late++;
-            else if (currentStatus === "excused") excused++;
             else absent++;
         });
 
         const totalStudents = exportRecords.length;
-        const totalPresent = present + late; // Đi muộn tính vào có mặt
-
         const aoaData: any[][] = [];
-        // Thông tin ca thi ở đầu sheet
-        aoaData.push(["THÔNG TIN CA THI"]);
-        aoaData.push(["Môn thi:", schedule.subject?.name || "", "", "Mã môn:", schedule.subject?.subject_code || ""]);
-        aoaData.push(["Phòng thi:", schedule.room?.name || schedule.room?.room_code || "", "", "Ngày thi:", schedule.start_time ? formatDateVN(toYMD(schedule.start_time)) : ""]);
-        aoaData.push(["Giờ bắt đầu:", schedule.start_time ? formatTime(schedule.start_time) : "", "", "Thời lượng:", `${schedule.duration || 120} phút`]);
-        aoaData.push(["Nhóm/Ca thi:", schedule.group || "", "", "Giám thị:", (supervisors || []).map(s => `${s.lecturer?.last_name || ""} ${s.lecturer?.first_name || ""}`.trim()).join(", ") || "Chưa phân công"]);
-        aoaData.push([]); // Dòng trống
         
-        // Thống kê điểm danh
-        aoaData.push(["THỐNG KÊ ĐIỂM DANH"]);
-        aoaData.push(["Tổng thí sinh:", totalStudents]);
-        aoaData.push(["Có mặt:", totalPresent]);
-        aoaData.push(["Vắng mặt:", absent]);
-        aoaData.push(["Đi muộn:", late]);
-        aoaData.push(["Có phép:", excused]);
-        aoaData.push([]); // Dòng trống
+        // --- CẤU TRÚC DỮ LIỆU ---
+        // Header
+        aoaData.push([{ v: "DANH SÁCH ĐIỂM DANH SINH VIÊN", t: "s", s: { font: { bold: true, sz: 14 }, alignment: { horizontal: "center" } } }, "", "", "", "", "", ""]);
+        aoaData.push([]);
+
+        // Thông tin ca thi dọc
+        const infoStyle = { font: { bold: true } };
+        const supervisorNames = (supervisors || []).map(s => `${s.lecturer?.last_name || ""} ${s.lecturer?.first_name || ""}`.trim()).join("\n") || "Chưa phân công";
+        
+        aoaData.push([
+            { v: "Môn thi:", t: "s", s: infoStyle }, { v: schedule.subject?.name || "" }, "", "",
+            { v: "Tổng thí sinh:", t: "s", s: infoStyle }, { v: totalStudents }
+        ]);
+        aoaData.push([
+            { v: "Mã môn:", t: "s", s: infoStyle }, { v: schedule.subject?.subject_code || "" }, "", "",
+            { v: "Có mặt:", t: "s", s: infoStyle }, { v: present }
+        ]);
+        aoaData.push([
+            { v: "Phòng thi:", t: "s", s: infoStyle }, { v: schedule.room?.name || schedule.room?.room_code || "" }, "", "",
+            { v: "Vắng mặt:", t: "s", s: infoStyle }, { v: absent }
+        ]);
+        aoaData.push([{ v: "Ngày thi:", t: "s", s: infoStyle }, { v: schedule.start_time ? formatDateVN(toYMD(schedule.start_time)) : "" }]);
+        aoaData.push([{ v: "Thời gian:", t: "s", s: infoStyle }, { v: `${schedule.start_time ? formatTime(schedule.start_time) : ""} (${schedule.duration || 120} phút)` }]);
+        aoaData.push([{ v: "Nhóm/Ca thi:", t: "s", s: infoStyle }, { v: schedule.group || "" }]);
+        aoaData.push([
+            { v: "Giám thị:", t: "s", s: { font: { bold: true }, alignment: { vertical: "top", horizontal: "left" } } }, 
+            { v: supervisorNames, t: "s", s: { alignment: { wrapText: true, horizontal: "left", vertical: "top" } } }
+        ]);
+        aoaData.push([]);
 
         // Tiêu đề bảng điểm danh
-        aoaData.push(["STT", "Mã SV", "Họ tên", "Lớp", "Trạng thái", "Thời gian điểm danh", "Ghi chú"]);
+        const headerStyle = {
+            font: { bold: true, color: { rgb: "FFFFFF" } },
+            fill: { fgColor: { rgb: "4F81BD" } },
+            alignment: { horizontal: "center", vertical: "center" },
+            border: {
+                top: { style: "thin", color: { rgb: "000000" } },
+                bottom: { style: "thin", color: { rgb: "000000" } },
+                left: { style: "thin", color: { rgb: "000000" } },
+                right: { style: "thin", color: { rgb: "000000" } },
+            }
+        };
+
+        const cellStyle = {
+            border: {
+                top: { style: "thin", color: { rgb: "000000" } },
+                bottom: { style: "thin", color: { rgb: "000000" } },
+                left: { style: "thin", color: { rgb: "000000" } },
+                right: { style: "thin", color: { rgb: "000000" } },
+            },
+            alignment: { vertical: "center" }
+        };
+
+        const centerCellStyle = { ...cellStyle, alignment: { horizontal: "center", vertical: "center" } };
+
+        aoaData.push([
+            { v: "STT", t: "s", s: headerStyle },
+            { v: "Mã SV", t: "s", s: headerStyle },
+            { v: "Họ và tên", t: "s", s: headerStyle },
+            { v: "", t: "s", s: headerStyle },
+            { v: "Lớp", t: "s", s: headerStyle },
+            { v: "Trạng thái", t: "s", s: headerStyle },
+            { v: "Thời gian điểm danh", t: "s", s: headerStyle },
+            { v: "Ghi chú", t: "s", s: headerStyle }
+        ]);
 
         // Dữ liệu điểm danh
         exportRecords.forEach((r, index) => {
-            const currentStatus = r.status || (r.attendance_time ? "present" : "absent");
+            const isPresent = !!r.attendance_time;
             aoaData.push([
-                index + 1,
-                r.student?.student_code || "",
-                `${r.student?.last_name || ""} ${r.student?.first_name || ""}`.trim(),
-                r.student?.class?.name || r.student?.class?.class_code || "",
-                currentStatus === "present" ? "Có mặt" : currentStatus === "late" ? "Đi muộn" : currentStatus === "excused" ? "Có phép" : "Vắng mặt",
-                r.attendance_time ? formatDateTime(r.attendance_time) : "",
-                r.note || "",
+                { v: index + 1, t: "n", s: centerCellStyle },
+                { v: r.student?.student_code || "", t: "s", s: centerCellStyle },
+                { v: r.student?.last_name || "", t: "s", s: cellStyle },
+                { v: r.student?.first_name || "", t: "s", s: cellStyle },
+                { v: r.student?.class?.name || r.student?.class?.class_code || "", t: "s", s: centerCellStyle },
+                { v: isPresent ? "Có mặt" : "Vắng mặt", t: "s", s: centerCellStyle },
+                { v: r.attendance_time ? formatDateTime(r.attendance_time) : "", t: "s", s: centerCellStyle },
+                { v: r.note || "", t: "s", s: cellStyle },
             ]);
         });
 
         const ws = XLSX.utils.aoa_to_sheet(aoaData);
         
+        // Cập nhật font chữ Times New Roman cho tất cả các cell
+        for (const cell in ws) {
+            if (cell[0] === '!') continue;
+            if (!ws[cell].s) ws[cell].s = {};
+            if (!ws[cell].s.font) ws[cell].s.font = {};
+            ws[cell].s.font.name = "Times New Roman";
+        }
+
         // Merge cell cho tiêu đề
         ws["!merges"] = [
-            { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }, // THÔNG TIN CA THI
-            { s: { r: 6, c: 0 }, e: { r: 6, c: 6 } }  // THỐNG KÊ ĐIỂM DANH
+            { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }, // Title
+            { s: { r: 10, c: 2 }, e: { r: 10, c: 3 } }, // Merge "Họ và tên" (cột 2 và 3)
+            { s: { r: 2, c: 1 }, e: { r: 2, c: 3 } },
+            { s: { r: 3, c: 1 }, e: { r: 3, c: 3 } },
+            { s: { r: 4, c: 1 }, e: { r: 4, c: 3 } },
+            { s: { r: 5, c: 1 }, e: { r: 5, c: 3 } },
+            { s: { r: 6, c: 1 }, e: { r: 6, c: 3 } },
+            { s: { r: 7, c: 1 }, e: { r: 7, c: 3 } },
+            { s: { r: 8, c: 1 }, e: { r: 8, c: 4 } }, // Giám thị
         ];
 
-        // Căn chỉnh độ rộng cột
-        ws['!cols'] = [{ wch: 15 }, { wch: 25 }, { wch: 30 }, { wch: 15 }, { wch: 30 }, { wch: 25 }, { wch: 20 }];
+        // Căn chỉnh độ rộng cột (Vừa trang A4 ngang)
+        ws['!cols'] = [
+            { wch: 12 }, // STT (Để rộng cho label cột A)
+            { wch: 13 }, // Mã SV
+            { wch: 18 }, // Họ và tên đệm
+            { wch: 8 },  // Tên
+            { wch: 12 }, // Lớp
+            { wch: 10 }, // Trạng thái
+            { wch: 18 }, // Thời gian
+            { wch: 16 }, // Ghi chú
+        ];
+
+        // Tự động giãn chiều cao dòng Giám thị để hiển thị đủ nhiều dòng
+        ws['!rows'] = [];
+        ws['!rows'][8] = { hpt: 16 * Math.max(1, supervisors?.length || 1) };
+
+        // Setup trang in (Landscape = ngang)
+        ws['!pageSetup'] = { orientation: 'landscape', paperSize: 9 }; // 9 = A4
 
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "DanhSachDiemDanh");
@@ -328,24 +380,16 @@ export function ExamDetailView({ schedule, onBack, hideAttendanceButton }: Props
             label: 'Trạng thái',
             align: 'center',
             render: (r) => {
-                const currentStatus = r.status || (r.attendance_time ? "present" : "absent");
+                const isPresent = !!r.attendance_time;
                 return (
-                    <select
-                        value={currentStatus}
-                        onChange={(e) => handleUpdateStatus(r, e.target.value as AttendanceStatus)}
+                    <span
                         className={cn(
-                            "text-[11px] font-semibold px-2 py-0.5 rounded-full outline-none border transition-colors cursor-pointer text-center",
-                            currentStatus === 'present' && "bg-emerald-50 text-emerald-700 border-emerald-200",
-                            currentStatus === 'late' && "bg-amber-50 text-amber-700 border-amber-200",
-                            currentStatus === 'excused' && "bg-blue-50 text-blue-700 border-blue-200",
-                            currentStatus === 'absent' && "bg-slate-50 text-slate-600 border-slate-200"
+                            "inline-block text-[11px] font-semibold px-2.5 py-0.5 rounded-full border text-center",
+                            isPresent ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-50 text-slate-600 border-slate-200"
                         )}
                     >
-                        <option value="present">Có mặt</option>
-                        <option value="absent">Vắng mặt</option>
-                        <option value="late">Đi muộn</option>
-                        <option value="excused">Có phép</option>
-                    </select>
+                        {isPresent ? "Có mặt" : "Vắng mặt"}
+                    </span>
                 );
             },
         },
@@ -421,10 +465,10 @@ export function ExamDetailView({ schedule, onBack, hideAttendanceButton }: Props
                     <InfoBadge icon="users" label="Thí sinh" value={`${records.length}`} />
                 </div>
 
-                {schedule.exam_period && (
+                {schedule.semester && (
                     <div className="mt-3 flex items-center gap-2 text-xs text-blue-700">
                         <i className="ti ti-calendar-event text-sm" />
-                        <span className="font-medium">{schedule.exam_period.name}</span>
+                        <span className="font-medium">Học kì {schedule.semester.semester_number} - {schedule.semester.academic_year}</span>
                     </div>
                 )}
                 
@@ -500,8 +544,6 @@ export function ExamDetailView({ schedule, onBack, hideAttendanceButton }: Props
                             <option value="all">Tất cả TT</option>
                             <option value="present">Có mặt</option>
                             <option value="absent">Vắng mặt</option>
-                            <option value="late">Đi muộn</option>
-                            <option value="excused">Có phép</option>
                         </select>
                         <Button 
                             variant="secondary" 

@@ -66,7 +66,11 @@ export default function StudentManagementPage() {
                 const res = await api.get("/classes", {
                     params: { faculty_code: facultyCode }
                 });
-                setClasses(res.data?.data || []);
+                const fetchedClasses = res.data?.data || [];
+                const sortedClasses = [...fetchedClasses].sort((a: Class, b: Class) => 
+                    a.class_code.localeCompare(b.class_code)
+                );
+                setClasses(sortedClasses);
             } catch (error) {
                 console.error("Lỗi khi tải danh sách lớp:", error);
             }
