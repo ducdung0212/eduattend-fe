@@ -166,7 +166,7 @@ export default function AdminDashboardPage() {
         label: "Ảnh khuôn mặt",
         render: (s) => (
             <div className="flex items-center">
-                {s.photos && s.photos.length > 0 ? (
+                {s.image_url ? (
                     <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 border border-emerald-100">
                         <IconCheck className="w-4 h-4 text-emerald-600" />
                         <span className="text-xs text-emerald-700 font-medium">Đã đăng ký</span>

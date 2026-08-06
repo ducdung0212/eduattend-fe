@@ -117,7 +117,7 @@ export function isAuthenticated(): boolean {
 // ── Lấy redirect path sau khi login theo role ────────────────
 export function getDefaultPath(role: string): string {
   const map: Record<string, string> = {
-    admin: '/admin/users',
+    admin: '/admin',
     lecturer: '/lecturer',
     student: '/student',
   };

@@ -72,7 +72,7 @@ export function LecturerFormModal({ open, lecturer, onClose, onSuccess }: Lectur
                     user_id: lecturer.user?.id ?? "", 
                 });
                 setSearchTerm(lecturer.user?.email || "");
-                setPhotoPreview((lecturer as any).photos?.[0]?.image_url || "");
+                setPhotoPreview((lecturer as any).image_url || "");
                 setPhotoFile(null);
                 setPhotoDeleted(false);
                 setFullName(`${lecturer.last_name} ${lecturer.first_name}`.trim());

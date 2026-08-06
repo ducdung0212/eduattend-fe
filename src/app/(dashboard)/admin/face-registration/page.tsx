@@ -186,52 +186,9 @@ export default function FaceRegistrationPage() {
             if (allFailures.length === 0) {
                 toast.success(`Đã lưu thành công toàn bộ ${successCount} ảnh!`);
                 handleClearAll();
-            } else if (allFailures.length <= 5) {
-                if (successCount > 0) {
-                    toast(
-                        (t) => (
-                            <div className="text-sm">
-                                <p className="font-semibold text-green-600 mb-1">✅ {successCount} ảnh lưu thành công</p>
-                                <p className="font-semibold text-rose-600 mb-2">❌ {allFailures.length} ảnh thất bại:</p>
-                                <div className="max-h-32 overflow-y-auto pr-1 space-y-1">
-                                    {allFailures.map((err, i) => (
-                                        <div key={i} className="bg-rose-50 border border-rose-100 rounded px-2 py-1.5 text-xs text-rose-700">
-                                            <span className="font-semibold">{err.name}:</span> {err.reason}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        ),
-                        { duration: 8000 }
-                    );
-                } else {
-                    toast.error(
-                        (t) => (
-                            <div className="text-sm">
-                                <p className="font-semibold text-rose-600 mb-2">Lưu thất bại toàn bộ:</p>
-                                <div className="max-h-40 overflow-y-auto pr-1 space-y-1">
-                                    {allFailures.map((err, i) => (
-                                        <div key={i} className="bg-rose-50 border border-rose-100 rounded px-2 py-1.5 text-xs text-rose-700">
-                                            <span className="font-semibold">{err.name}:</span> {err.reason}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        ),
-                        { duration: 8000 }
-                    );
-                }
-
-                const successFileNames = new Set(
-                    Array.isArray(results)
-                        ? results.filter((r) => r.success).map((r) => r.fileName)
-                        : successfulUploads.map((r) => r.img.file.name)
-                );
-                setImages((prev) => prev.filter((img) => !successFileNames.has(img.file.name)));
             } else {
-                // > 5 errors -> Export excel
                 if (successCount > 0) {
-                    toast.success(`Đã lưu thành công ${successCount} ảnh. Có ${allFailures.length} ảnh bị lỗi.`);
+                    toast.error(`Đã lưu thành công ${successCount} ảnh. Có ${allFailures.length} ảnh bị lỗi.`);
                 } else {
                     toast.error(`Lưu thất bại toàn bộ ${allFailures.length} ảnh.`);
                 }
@@ -244,6 +201,19 @@ export default function FaceRegistrationPage() {
                                 data.push([f.name, f.reason]);
                             });
                             const newWorksheet = XLSX.utils.aoa_to_sheet(data);
+                            
+                            // Auto-fit column widths
+                            if (data.length > 0) {
+                                const colWidths = data[0].map((_, colIndex) => {
+                                    const max = Math.max(...data.map(row => {
+                                        const val = row[colIndex];
+                                        return val ? val.toString().length : 10;
+                                    }));
+                                    return { wch: Math.min(max + 2, 100) };
+                                });
+                                newWorksheet['!cols'] = colWidths;
+                            }
+
                             const newWorkbook = XLSX.utils.book_new();
                             XLSX.utils.book_append_sheet(newWorkbook, newWorksheet, "Errors");
                             XLSX.writeFile(newWorkbook, `Danh_sach_loi_anh_${new Date().getTime()}.xlsx`);

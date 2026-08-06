@@ -102,6 +102,19 @@ export function ImportModal({
             }
 
             const newWorksheet = XLSX.utils.aoa_to_sheet(newData);
+            
+            // Auto-fit column widths
+            if (newData.length > 0) {
+                const colWidths = newData[0].map((_, colIndex) => {
+                    const max = Math.max(...newData.map(row => {
+                        const val = row[colIndex];
+                        return val ? val.toString().length : 10;
+                    }));
+                    return { wch: Math.min(max + 2, 100) };
+                });
+                newWorksheet['!cols'] = colWidths;
+            }
+
             const newWorkbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(newWorkbook, newWorksheet, "Errors");
 

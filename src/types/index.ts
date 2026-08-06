@@ -35,7 +35,7 @@ export interface MenuItem {
 
 
 // ── Attendance ───────────────────────────────────────────────
-export type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
+export type AttendanceStatus = 'present' | 'absent' ;
 export type AttendanceMethod = 'qr_code' | 'face';
 export type RekognitionResult = 'match' | 'not_match' | 'unknown'
 
@@ -63,7 +63,7 @@ export interface Student {
   phone: string;
   class: Class;
   user: User;
-  photos?: { image_url: string }[];
+  image_url?: string | null;
 }
 export interface Lecturer {
   lecturer_code: string;
@@ -73,7 +73,7 @@ export interface Lecturer {
   phone: string;
   faculty: Faculty;
   user: User;
-  photos?: { image_url: string }[];
+  image_url?: string | null;
 }
 
 export interface Room {

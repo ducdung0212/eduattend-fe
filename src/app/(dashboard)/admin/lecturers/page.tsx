@@ -200,7 +200,7 @@ export default function LecturerManagementPage() {
             label: "Ảnh khuôn mặt",
             render: (l) => (
                 <div className="flex items-center">
-                    {l.photos && l.photos.length > 0 ? (
+                    {l.image_url ? (
                         <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 border border-emerald-100">
                             <IconCheck className="w-4 h-4 text-emerald-600" />
                             <span className="text-xs text-emerald-700 font-medium">Đã đăng ký</span>

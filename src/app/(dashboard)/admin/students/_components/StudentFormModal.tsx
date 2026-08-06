@@ -83,7 +83,7 @@ export function StudentFormModal({ open, student, onClose, onSuccess }: StudentF
                     user_id: student.user?.id ?? "",
                 });
                 setSearchTerm(student.user?.email || "");
-                setPhotoPreview(student.photos?.[0]?.image_url || "");
+                setPhotoPreview(student.image_url || "");
                 setPhotoFile(null);
                 setPhotoDeleted(false);
                 setFullName(`${student.last_name} ${student.first_name}`.trim());

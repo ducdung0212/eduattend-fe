@@ -341,10 +341,10 @@ export function ExamDetailView({ schedule, onBack, hideAttendanceButton }: Props
             label: 'Ảnh gốc',
             align: 'center',
             render: (r) => {
-                const hasPhoto = r.student?.photos && r.student.photos.length > 0;
+                const hasPhoto = !!r.student?.image_url;
                 return hasPhoto ? (
                     <button
-                        onClick={() => setSelectedImage(r.student.photos![0].image_url)}
+                        onClick={() => setSelectedImage(r.student.image_url!)}
                         className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-100 text-slate-500 hover:bg-blue-50 hover:text-blue-600 transition-colors"
                         title="Xem ảnh gốc"
                     >
