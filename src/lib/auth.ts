@@ -71,6 +71,15 @@ export async function loginFace(payload: LoginFacePayload): Promise<LoginRespons
   return normalized;
 }
 
+export async function checkFaceLock(): Promise<{ isLocked: boolean; lockedUntil?: number }> {
+  try {
+    const { data } = await api.get(`/auth/check-face-lock?t=${Date.now()}`);
+    return data.data || data;
+  } catch {
+    return { isLocked: false };
+  }
+}
+
 // ── Đăng xuất ────────────────────────────────────────────────
 export function logout(): void {
   deleteCookie('access_token');

@@ -1,6 +1,7 @@
 "use client";
 import { useState, useCallback, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { checkFaceLock } from "@/lib/auth";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { useFaceDetectionCamera } from "@/hooks/useFaceDetectionCamera";
@@ -11,6 +12,8 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [failedFaceCount, setFailedFaceCount] = useState(0);
+  const [lockTimeLeft, setLockTimeLeft] = useState<number | null>(null);
   
   const {
     videoRef,
@@ -26,20 +29,78 @@ export default function LoginPage() {
     captureFullFrame
   } = useFaceDetectionCamera("user");
 
+  const isLockedUI = failedFaceCount >= 3;
+
   useEffect(() => {
-    if (loginMethod !== "face") {
+    if (loginMethod !== "face" || isLockedUI) {
       stopCamera();
     } else {
       startCamera();
     }
     return () => stopCamera();
-  }, [loginMethod, startCamera, stopCamera]);
+  }, [loginMethod, isLockedUI, startCamera, stopCamera]);
 
   useEffect(() => {
     if (cameraError) {
       setError(cameraError);
     }
   }, [cameraError]);
+
+  useEffect(() => {
+    if (failedFaceCount >= 3) {
+      const updateTimer = () => {
+        const lockTimeStr = localStorage.getItem("faceLoginLockTime");
+        if (lockTimeStr) {
+          const lockTime = parseInt(lockTimeStr, 10);
+          const diff = lockTime - Date.now();
+          if (diff > 0) {
+            setLockTimeLeft(diff);
+          } else {
+             setLockTimeLeft(null);
+             setFailedFaceCount(0);
+             localStorage.removeItem("faceLoginLockTime");
+          }
+        }
+      };
+      
+      updateTimer();
+      const interval = setInterval(updateTimer, 1000);
+      return () => clearInterval(interval);
+    } else {
+      setLockTimeLeft(null);
+    }
+  }, [failedFaceCount]);
+
+  const formatTimeLeft = (ms: number) => {
+    const totalSeconds = Math.ceil(ms / 1000);
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    return `${m} phút ${s} giây`;
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+    
+    const lockTime = localStorage.getItem("faceLoginLockTime");
+    if (lockTime && parseInt(lockTime, 10) > Date.now()) {
+      setFailedFaceCount(3);
+      return;
+    } else if (lockTime) {
+      localStorage.removeItem("faceLoginLockTime");
+    }
+
+    const verifyLockOnServer = async () => {
+      const res = await checkFaceLock();
+      if (isMounted && res.isLocked && res.lockedUntil) {
+        setFailedFaceCount(3);
+        localStorage.setItem("faceLoginLockTime", res.lockedUntil.toString());
+      }
+    };
+    
+    verifyLockOnServer();
+    
+    return () => { isMounted = false; };
+  }, []);
 
   const handleSubmitPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,7 +133,21 @@ export default function LoginPage() {
     
     try {
       await loginFace({ imageBase64 });
+      setFailedFaceCount(0);
+      localStorage.removeItem("faceLoginLockTime");
     } catch (err: any) {
+      const isLocked = err?.response?.status === 429;
+      
+      setFailedFaceCount(prev => {
+        const next = isLocked ? 3 : prev + 1;
+        if (next >= 3) {
+          const lockedUntilFromBE = err?.response?.data?.data?.lockedUntil || err?.response?.data?.lockedUntil;
+          const lockedUntil = lockedUntilFromBE || (Date.now() + 60 * 60 * 1000); // fallback to 1 hour
+          localStorage.setItem("faceLoginLockTime", lockedUntil.toString());
+        }
+        return next;
+      });
+      
       const msg = err?.response?.data?.message;
       setError(Array.isArray(msg) ? msg.join(", ") : (msg ?? "Xác thực khuôn mặt thất bại."));
     }
@@ -156,6 +231,29 @@ export default function LoginPage() {
                 Đăng nhập
               </Button>
             </form>
+          ) : isLockedUI ? (
+            <div className="space-y-4 flex flex-col items-center justify-center py-8">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
+                <i className="ti ti-lock text-3xl text-red-600" aria-hidden="true" />
+              </div>
+              <h3 className="text-lg font-semibold text-slate-800">Khóa đăng nhập khuôn mặt</h3>
+              <p className="text-sm text-slate-500 text-center px-4">
+                Bạn đã nhập sai 3 lần. Chức năng đăng nhập bằng khuôn mặt đã bị khóa để bảo mật.
+                {lockTimeLeft !== null && (
+                  <span className="font-semibold text-red-600 mt-2 block">
+                    Vui lòng thử lại sau: {formatTimeLeft(lockTimeLeft)}
+                  </span>
+                )}
+              </p>
+              <Button
+                type="button"
+                variant="secondary"
+                className="mt-4"
+                onClick={() => setLoginMethod("password")}
+              >
+                Đăng nhập bằng mật khẩu
+              </Button>
+            </div>
           ) : (
             <div className="space-y-4 flex flex-col items-center">
               <div className="w-full rounded-xl overflow-hidden border-2 border-slate-200 aspect-video relative bg-black flex items-center justify-center">
