@@ -233,13 +233,13 @@ export default function AdminDashboardPage() {
         {/* KPI 3 */}
         <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-slate-600">Học kì đang diễn ra</h3>
+            <h3 className="text-sm font-semibold text-slate-600">Tổng giảng viên</h3>
             <div className="w-8 h-8 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center">
-              <i className="ti ti-folders text-lg"></i>
+              <i className="ti ti-user-scan text-lg"></i>
             </div>
           </div>
-          <div className="text-2xl font-bold text-slate-900 mb-1">{overview.activeSemesters}</div>
-          <div className="text-xs text-slate-500">Học kì đang trong thời gian diễn ra</div>
+          <div className="text-2xl font-bold text-slate-900 mb-1">{overview.totalLecturers}</div>
+          <div className="text-xs text-slate-500">Giảng viên trong hệ thống</div>
         </div>
 
         {/* KPI 4 */}
