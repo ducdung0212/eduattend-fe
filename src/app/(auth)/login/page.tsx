@@ -14,6 +14,7 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [failedFaceCount, setFailedFaceCount] = useState(0);
   const [lockTimeLeft, setLockTimeLeft] = useState<number | null>(null);
+  const [isCheckingLock, setIsCheckingLock] = useState(true); // Chờ kiểm tra khóa trước khi bật camera
   
   const {
     videoRef,
@@ -32,13 +33,13 @@ export default function LoginPage() {
   const isLockedUI = failedFaceCount >= 3;
 
   useEffect(() => {
-    if (loginMethod !== "face" || isLockedUI) {
+    if (loginMethod !== "face" || isLockedUI || isCheckingLock) {
       stopCamera();
     } else {
       startCamera();
     }
     return () => stopCamera();
-  }, [loginMethod, isLockedUI, startCamera, stopCamera]);
+  }, [loginMethod, isLockedUI, isCheckingLock, startCamera, stopCamera]);
 
   useEffect(() => {
     if (cameraError) {
@@ -80,20 +81,28 @@ export default function LoginPage() {
 
   useEffect(() => {
     let isMounted = true;
+    setIsCheckingLock(true);
     
     const lockTime = localStorage.getItem("faceLoginLockTime");
     if (lockTime && parseInt(lockTime, 10) > Date.now()) {
       setFailedFaceCount(3);
+      setIsCheckingLock(false);
       return;
     } else if (lockTime) {
       localStorage.removeItem("faceLoginLockTime");
     }
 
     const verifyLockOnServer = async () => {
-      const res = await checkFaceLock();
-      if (isMounted && res.isLocked && res.lockedUntil) {
-        setFailedFaceCount(3);
-        localStorage.setItem("faceLoginLockTime", res.lockedUntil.toString());
+      try {
+        const res = await checkFaceLock();
+        if (isMounted && res.isLocked && res.lockedUntil) {
+          setFailedFaceCount(3);
+          localStorage.setItem("faceLoginLockTime", res.lockedUntil.toString());
+        }
+      } finally {
+        if (isMounted) {
+          setIsCheckingLock(false);
+        }
       }
     };
     
