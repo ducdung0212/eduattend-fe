@@ -5,6 +5,7 @@ import { checkFaceLock } from "@/lib/auth";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { useFaceDetectionCamera } from "@/hooks/useFaceDetectionCamera";
+import { usePassiveLiveness } from "@/hooks/usePassiveLiveness";
 
 export default function LoginPage() {
   const { login, loginFace, loading } = useAuth();
@@ -15,6 +16,7 @@ export default function LoginPage() {
   const [failedFaceCount, setFailedFaceCount] = useState(0);
   const [lockTimeLeft, setLockTimeLeft] = useState<number | null>(null);
   const [isCheckingLock, setIsCheckingLock] = useState(true); // Chờ kiểm tra khóa trước khi bật camera
+  const [isVerifying, setIsVerifying] = useState(false); // Trạng thái đang xác thực liveness
   
   const {
     videoRef,
@@ -26,9 +28,11 @@ export default function LoginPage() {
     startCamera,
     stopCamera,
     handleVideoPlay,
-    detectFacesCurrentFrame,
-    captureFullFrame
-  } = useFaceDetectionCamera("user");
+    captureFullFrame,
+    landmarkerRef,
+  } = useFaceDetectionCamera({ initialFacingMode: "user", useLandmarker: true });
+
+  const { captureFramesWithLandmarks, checkLiveness, LIVENESS_CONFIG } = usePassiveLiveness();
 
   const isLockedUI = failedFaceCount >= 3;
 
@@ -124,43 +128,103 @@ export default function LoginPage() {
 
   const handleFaceLogin = useCallback(async () => {
     setError("");
-    const detections = detectFacesCurrentFrame();
-    
-    if (detections.length === 0) {
-        setError("Không nhận diện được khuôn mặt nào. Vui lòng nhìn thẳng vào camera.");
-        return;
-    }
-    if (detections.length > 1) {
-        setError(`Phát hiện ${detections.length} khuôn mặt. Vui lòng đảm bảo chỉ có 1 người trong khung hình.`);
-        return;
+
+    // Kiểm tra FaceLandmarker đã sẵn sàng
+    if (!landmarkerRef.current || !videoRef.current) {
+      setError("AI chưa sẵn sàng. Vui lòng đợi.");
+      return;
     }
 
-    const captureCanvas = captureFullFrame();
-    if (!captureCanvas) return;
-    
-    const imageBase64 = captureCanvas.toDataURL("image/jpeg", 0.9);
-    
-    try {
-      await loginFace({ imageBase64 });
-      setFailedFaceCount(0);
-      localStorage.removeItem("faceLoginLockTime");
-    } catch (err: any) {
-      const isLocked = err?.response?.status === 429;
-      
-      setFailedFaceCount(prev => {
-        const next = isLocked ? 3 : prev + 1;
-        if (next >= 3) {
-          const lockedUntilFromBE = err?.response?.data?.data?.lockedUntil || err?.response?.data?.lockedUntil;
-          const lockedUntil = lockedUntilFromBE || (Date.now() + 60 * 60 * 1000); // fallback to 1 hour
-          localStorage.setItem("faceLoginLockTime", lockedUntil.toString());
-        }
-        return next;
-      });
-      
-      const msg = err?.response?.data?.message;
-      setError(Array.isArray(msg) ? msg.join(", ") : (msg ?? "Xác thực khuôn mặt thất bại."));
+    // Kiểm tra có đúng 1 khuôn mặt trong frame hiện tại
+    const currentResult = landmarkerRef.current.detectForVideo(
+      videoRef.current,
+      performance.now()
+    );
+    const currentFaces = currentResult.faceLandmarks || [];
+
+    if (currentFaces.length === 0) {
+      setError("Không nhận diện được khuôn mặt nào. Vui lòng nhìn thẳng vào camera.");
+      return;
     }
-  }, [detectFacesCurrentFrame, captureFullFrame, loginFace]);
+    if (currentFaces.length > 1) {
+      setError(`Phát hiện ${currentFaces.length} khuôn mặt. Vui lòng đảm bảo chỉ có 1 người trong khung hình.`);
+      return;
+    }
+
+    // ── Bắt đầu Passive Liveness Check ──────────────────────────────────
+    setIsVerifying(true);
+
+    try {
+      // Bước 1: Chụp nhiều frame + lấy landmarks
+      const { imageDataList, landmarksList, bestFrameCanvas } =
+        await captureFramesWithLandmarks(
+          videoRef.current,
+          landmarkerRef.current,
+          LIVENESS_CONFIG.FRAME_COUNT,
+          LIVENESS_CONFIG.FRAME_INTERVAL_MS
+        );
+
+      // Bước 2: Kiểm tra liveness
+      const livenessResult = checkLiveness(imageDataList, landmarksList);
+
+      console.log("[Liveness]", {
+        isLive: livenessResult.isLive,
+        passedLayers: livenessResult.passedLayers,
+        scores: livenessResult.scores,
+      });
+
+      if (!livenessResult.isLive) {
+        // Liveness check thất bại → ảnh tĩnh
+        setIsVerifying(false);
+        setFailedFaceCount((prev) => {
+          const next = prev + 1;
+          if (next >= 3) {
+            const lockedUntil = Date.now() + 60 * 60 * 1000;
+            localStorage.setItem("faceLoginLockTime", lockedUntil.toString());
+          }
+          return next;
+        });
+        setError(livenessResult.reason || "Xác thực thất bại. Vui lòng sử dụng khuôn mặt thật.");
+        return;
+      }
+
+      // Bước 3: Liveness passed → gửi frame tốt nhất lên Rekognition
+      if (!bestFrameCanvas) {
+        setIsVerifying(false);
+        setError("Không thể chụp ảnh. Vui lòng thử lại.");
+        return;
+      }
+
+      const imageBase64 = bestFrameCanvas.toDataURL("image/jpeg", 0.9);
+
+      try {
+        await loginFace({ imageBase64 });
+        setFailedFaceCount(0);
+        localStorage.removeItem("faceLoginLockTime");
+      } catch (err: any) {
+        const isLocked = err?.response?.status === 429;
+
+        setFailedFaceCount((prev) => {
+          const next = isLocked ? 3 : prev + 1;
+          if (next >= 3) {
+            const lockedUntilFromBE =
+              err?.response?.data?.data?.lockedUntil || err?.response?.data?.lockedUntil;
+            const lockedUntil = lockedUntilFromBE || Date.now() + 60 * 60 * 1000;
+            localStorage.setItem("faceLoginLockTime", lockedUntil.toString());
+          }
+          return next;
+        });
+
+        const msg = err?.response?.data?.message;
+        setError(Array.isArray(msg) ? msg.join(", ") : (msg ?? "Xác thực khuôn mặt thất bại."));
+      }
+    } catch (err) {
+      console.error("[Liveness Error]", err);
+      setError("Lỗi trong quá trình xác thực. Vui lòng thử lại.");
+    } finally {
+      setIsVerifying(false);
+    }
+  }, [captureFramesWithLandmarks, checkLiveness, loginFace, landmarkerRef, videoRef, LIVENESS_CONFIG]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
@@ -272,6 +336,14 @@ export default function LoginPage() {
                         <span className="text-slate-300 text-sm font-medium">Đang tải AI...</span>
                     </div>
                 )}
+
+                {/* Overlay khi đang xác thực liveness */}
+                {isVerifying && (
+                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 bg-black/60 rounded-full px-4 py-2">
+                        <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-emerald-400 animate-spin" />
+                        <span className="text-white text-xs font-semibold">Đang xác thực...</span>
+                    </div>
+                )}
                 
                 <video
                     ref={videoRef}
@@ -288,7 +360,7 @@ export default function LoginPage() {
                     style={{ transform: "scaleX(-1)" }} 
                 />
                 
-                {isCameraOn && !loading && (
+                {isCameraOn && !loading && !isVerifying && (
                     <div className="absolute top-2 left-2 z-30">
                         {faceCount === 1 ? (
                             <span className="bg-emerald-500/90 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm">
@@ -306,6 +378,7 @@ export default function LoginPage() {
                     </div>
                 )}
               </div>
+
               <p className="text-sm text-slate-500 text-center">
                 Vui lòng đưa 1 khuôn mặt lại gần camera để đăng nhập.
               </p>
@@ -313,12 +386,12 @@ export default function LoginPage() {
                 type="button"
                 variant="primary"
                 size="lg"
-                loading={loading}
+                loading={loading || isVerifying}
                 onClick={handleFaceLogin}
                 className="w-full mt-2 shadow-md"
-                disabled={!isCameraOn || isLoadingAI || faceCount !== 1}
+                disabled={!isCameraOn || isLoadingAI || faceCount !== 1 || isVerifying}
               >
-                Quét khuôn mặt
+                {isVerifying ? "Đang xác thực..." : "Quét khuôn mặt"}
               </Button>
             </div>
           )}

@@ -1,14 +1,40 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { FaceDetector, FilesetResolver, Detection } from "@mediapipe/tasks-vision";
+import {
+    FaceDetector,
+    FaceLandmarker,
+    FilesetResolver,
+    Detection,
+} from "@mediapipe/tasks-vision";
 
-export function useFaceDetectionCamera(initialFacingMode: "user" | "environment" = "user") {
+interface UseFaceDetectionCameraOptions {
+    initialFacingMode?: "user" | "environment";
+    /** Khi true, dùng FaceLandmarker (468 landmarks) thay vì FaceDetector (chỉ bounding box).
+     *  Cần cho tính năng Passive Liveness Detection ở trang login. */
+    useLandmarker?: boolean;
+}
+
+export function useFaceDetectionCamera(
+    initialFacingModeOrOptions: "user" | "environment" | UseFaceDetectionCameraOptions = "user"
+) {
+    // Xử lý tham số linh hoạt: string (backward compatible) hoặc object
+    const options: UseFaceDetectionCameraOptions =
+        typeof initialFacingModeOrOptions === "string"
+            ? { initialFacingMode: initialFacingModeOrOptions }
+            : initialFacingModeOrOptions;
+
+    const {
+        initialFacingMode = "user",
+        useLandmarker = false,
+    } = options;
+
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     
     const streamRef = useRef<MediaStream | null>(null);
     const detectorRef = useRef<FaceDetector | null>(null);
+    const landmarkerRef = useRef<FaceLandmarker | null>(null);
     const detectCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const animationFrameRef = useRef<number | null>(null);
     const videoFrameRef = useRef<number | null>(null);
@@ -33,29 +59,62 @@ export function useFaceDetectionCamera(initialFacingMode: "user" | "environment"
         setIsLoadingAI(true);
         setError("");
         try {
-            if (!detectorRef.current) {
-                const vision = await FilesetResolver.forVisionTasks("/wasm");
-                let detector: FaceDetector;
-                try {
-                    detector = await FaceDetector.createFromOptions(vision, {
-                        baseOptions: {
-                            modelAssetPath: "/models/blaze_face_full_range.tflite",
-                            delegate: "GPU"
-                        },
-                        runningMode: "VIDEO",
-                        minDetectionConfidence: 0.4
-                    });
-                } catch {
-                    detector = await FaceDetector.createFromOptions(vision, {
-                        baseOptions: {
-                            modelAssetPath: "/models/blaze_face_full_range.tflite",
-                            delegate: "CPU"
-                        },
-                        runningMode: "VIDEO",
-                        minDetectionConfidence: 0.4
-                    });
+            const vision = await FilesetResolver.forVisionTasks("/wasm");
+
+            if (useLandmarker) {
+                // ── FaceLandmarker mode (cho Login + Liveness) ──────────────
+                if (!landmarkerRef.current) {
+                    let landmarker: FaceLandmarker;
+                    try {
+                        landmarker = await FaceLandmarker.createFromOptions(vision, {
+                            baseOptions: {
+                                modelAssetPath: "/models/face_landmarker.task",
+                                delegate: "GPU",
+                            },
+                            runningMode: "VIDEO",
+                            numFaces: 2, // Detect tối đa 2 để phát hiện > 1 khuôn mặt
+                            minFaceDetectionConfidence: 0.4,
+                            minTrackingConfidence: 0.4,
+                        });
+                    } catch {
+                        landmarker = await FaceLandmarker.createFromOptions(vision, {
+                            baseOptions: {
+                                modelAssetPath: "/models/face_landmarker.task",
+                                delegate: "CPU",
+                            },
+                            runningMode: "VIDEO",
+                            numFaces: 2,
+                            minFaceDetectionConfidence: 0.4,
+                            minTrackingConfidence: 0.4,
+                        });
+                    }
+                    landmarkerRef.current = landmarker;
                 }
-                detectorRef.current = detector;
+            } else {
+                // ── FaceDetector mode (cho điểm danh - giữ nguyên) ─────────
+                if (!detectorRef.current) {
+                    let detector: FaceDetector;
+                    try {
+                        detector = await FaceDetector.createFromOptions(vision, {
+                            baseOptions: {
+                                modelAssetPath: "/models/blaze_face_full_range.tflite",
+                                delegate: "GPU"
+                            },
+                            runningMode: "VIDEO",
+                            minDetectionConfidence: 0.4
+                        });
+                    } catch {
+                        detector = await FaceDetector.createFromOptions(vision, {
+                            baseOptions: {
+                                modelAssetPath: "/models/blaze_face_full_range.tflite",
+                                delegate: "CPU"
+                            },
+                            runningMode: "VIDEO",
+                            minDetectionConfidence: 0.4
+                        });
+                    }
+                    detectorRef.current = detector;
+                }
             }
 
             const stream = await navigator.mediaDevices.getUserMedia({
@@ -74,7 +133,7 @@ export function useFaceDetectionCamera(initialFacingMode: "user" | "environment"
         } finally {
             setIsLoadingAI(false);
         }
-    }, [facingMode]);
+    }, [facingMode, useLandmarker]);
 
     const stopCamera = useCallback(() => {
         if (videoFrameRef.current && videoRef.current && 'cancelVideoFrameCallback' in videoRef.current) {
@@ -93,6 +152,10 @@ export function useFaceDetectionCamera(initialFacingMode: "user" | "environment"
             detectorRef.current.close();
             detectorRef.current = null;
         }
+        if (landmarkerRef.current) {
+            landmarkerRef.current.close();
+            landmarkerRef.current = null;
+        }
         setIsCameraOn(false);
         setFaceCount(0);
     }, []);
@@ -104,10 +167,13 @@ export function useFaceDetectionCamera(initialFacingMode: "user" | "environment"
     }, [facingMode, startCamera, stopCamera]);
 
     const handleVideoPlay = useCallback(() => {
-        if (!videoRef.current || !canvasRef.current || !detectorRef.current) return;
-        
         const video = videoRef.current;
         const canvas = canvasRef.current;
+        if (!video || !canvas) return;
+
+        // Cần ít nhất 1 trong 2 detector/landmarker
+        if (!detectorRef.current && !landmarkerRef.current) return;
+        
         const ctx = canvas.getContext("2d");
 
         if (!detectCanvasRef.current) {
@@ -117,7 +183,8 @@ export function useFaceDetectionCamera(initialFacingMode: "user" | "environment"
         let lastDetectionTime = 0;
 
         const detectLoop = (now: number = performance.now()) => {
-            if (video.paused || video.ended || !detectorRef.current) return;
+            if (video.paused || video.ended) return;
+            if (!detectorRef.current && !landmarkerRef.current) return;
 
             if (now - lastDetectionTime >= 100) { // Limit to 10fps
                 lastDetectionTime = now;
@@ -137,43 +204,77 @@ export function useFaceDetectionCamera(initialFacingMode: "user" | "environment"
                     dctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
 
                     const ts = getValidTimestamp();
-                    const result = detectorRef.current.detectForVideo(detectCanvasRef.current!, ts);
-                    const detections = result.detections;
-                    setFaceCount(detections.length);
 
-                    if (ctx) {
-                        ctx.clearRect(0, 0, canvas.width, canvas.height);
-                        const scaleX = 1;
-                        const scaleY = 1;
+                    if (useLandmarker && landmarkerRef.current) {
+                        // ── FaceLandmarker mode ───────────────────────────
+                        const result = landmarkerRef.current.detectForVideo(detectCanvasRef.current!, ts);
+                        const faces = result.faceLandmarks || [];
+                        setFaceCount(faces.length);
 
-                        detections.forEach((det) => {
-                            if (!det.boundingBox) return;
-                            const { originX, originY, width, height } = det.boundingBox;
-                            
-                            // Model full_range trả về bounding box bao toàn bộ vùng đầu khá to
-                            // Thu nhỏ 15% mỗi cạnh để khung xanh lá cây bám sát khuôn mặt hơn (UI đẹp hơn)
-                            const shrinkX = width * 0.15;
-                            const shrinkY = height * 0.15;
-                            
-                            const x = (originX + shrinkX) * scaleX;
-                            const y = (originY + shrinkY) * scaleY;
-                            const w = (width - shrinkX * 2) * scaleX;
-                            const h = (height - shrinkY * 2) * scaleY;
+                        if (ctx) {
+                            ctx.clearRect(0, 0, canvas.width, canvas.height);
+                            // Vẽ bounding box từ landmarks (tính min/max x,y)
+                            faces.forEach((landmarks) => {
+                                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                                for (const lm of landmarks) {
+                                    const px = lm.x * canvas.width;
+                                    const py = lm.y * canvas.height;
+                                    if (px < minX) minX = px;
+                                    if (py < minY) minY = py;
+                                    if (px > maxX) maxX = px;
+                                    if (py > maxY) maxY = py;
+                                }
+                                // Thu nhỏ 10% cho đẹp
+                                const w = maxX - minX;
+                                const h = maxY - minY;
+                                const shrinkX = w * 0.1;
+                                const shrinkY = h * 0.1;
 
-                            ctx.strokeStyle = "#22c55e";
-                            ctx.lineWidth = 3;
-                            ctx.strokeRect(x, y, w, h);
+                                ctx.strokeStyle = "#22c55e";
+                                ctx.lineWidth = 3;
+                                ctx.strokeRect(minX + shrinkX, minY + shrinkY, w - shrinkX * 2, h - shrinkY * 2);
+                            });
+                        }
+                    } else if (detectorRef.current) {
+                        // ── FaceDetector mode (giữ nguyên logic cũ) ──────
+                        const result = detectorRef.current.detectForVideo(detectCanvasRef.current!, ts);
+                        const detections = result.detections;
+                        setFaceCount(detections.length);
 
-                            // Label for environment mode usually
-                            if (facingMode === "environment") {
-                                ctx.fillStyle = "rgba(34, 197, 94, 0.85)";
-                                ctx.fillRect(x, y - 20, 80, 20);
-                                ctx.fillStyle = "#fff";
-                                ctx.font = "bold 11px Inter, sans-serif";
-                                const score = det.categories[0]?.score ?? 0;
-                                ctx.fillText(`Face ${(score * 100).toFixed(0)}%`, x + 4, y - 6);
-                            }
-                        });
+                        if (ctx) {
+                            ctx.clearRect(0, 0, canvas.width, canvas.height);
+                            const scaleX = 1;
+                            const scaleY = 1;
+
+                            detections.forEach((det) => {
+                                if (!det.boundingBox) return;
+                                const { originX, originY, width, height } = det.boundingBox;
+                                
+                                // Model full_range trả về bounding box bao toàn bộ vùng đầu khá to
+                                // Thu nhỏ 15% mỗi cạnh để khung xanh lá cây bám sát khuôn mặt hơn (UI đẹp hơn)
+                                const shrinkX = width * 0.15;
+                                const shrinkY = height * 0.15;
+                                
+                                const x = (originX + shrinkX) * scaleX;
+                                const y = (originY + shrinkY) * scaleY;
+                                const w = (width - shrinkX * 2) * scaleX;
+                                const h = (height - shrinkY * 2) * scaleY;
+
+                                ctx.strokeStyle = "#22c55e";
+                                ctx.lineWidth = 3;
+                                ctx.strokeRect(x, y, w, h);
+
+                                // Label for environment mode usually
+                                if (facingMode === "environment") {
+                                    ctx.fillStyle = "rgba(34, 197, 94, 0.85)";
+                                    ctx.fillRect(x, y - 20, 80, 20);
+                                    ctx.fillStyle = "#fff";
+                                    ctx.font = "bold 11px Inter, sans-serif";
+                                    const score = det.categories[0]?.score ?? 0;
+                                    ctx.fillText(`Face ${(score * 100).toFixed(0)}%`, x + 4, y - 6);
+                                }
+                            });
+                        }
                     }
                 } catch (e) {
                     console.error("Detect error:", e);
@@ -192,7 +293,7 @@ export function useFaceDetectionCamera(initialFacingMode: "user" | "environment"
         } else {
             animationFrameRef.current = requestAnimationFrame(() => detectLoop(performance.now()));
         }
-    }, [facingMode, getValidTimestamp]);
+    }, [facingMode, getValidTimestamp, useLandmarker]);
 
     const detectFacesCurrentFrame = useCallback((): Detection[] => {
         if (!videoRef.current || !detectorRef.current) return [];
@@ -226,6 +327,8 @@ export function useFaceDetectionCamera(initialFacingMode: "user" | "environment"
         switchCamera,
         handleVideoPlay,
         detectFacesCurrentFrame,
-        captureFullFrame
+        captureFullFrame,
+        /** Ref đến FaceLandmarker instance — dùng cho passive liveness hook */
+        landmarkerRef,
     };
 }
