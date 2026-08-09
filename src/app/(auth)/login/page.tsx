@@ -1,55 +1,22 @@
 "use client";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { checkFaceLock } from "@/lib/auth";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import { useFaceDetectionCamera } from "@/hooks/useFaceDetectionCamera";
-import { usePassiveLiveness } from "@/hooks/usePassiveLiveness";
+import { LecturerLivenessLogin } from "@/components/LecturerLivenessLogin";
 
 export default function LoginPage() {
-  const { login, loginFace, loading } = useAuth();
+  const { login, loginLiveness, loading } = useAuth();
   const [loginMethod, setLoginMethod] = useState<"password" | "face">("password");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [failedFaceCount, setFailedFaceCount] = useState(0);
   const [lockTimeLeft, setLockTimeLeft] = useState<number | null>(null);
-  const [isCheckingLock, setIsCheckingLock] = useState(true); // Chờ kiểm tra khóa trước khi bật camera
-  const [isVerifying, setIsVerifying] = useState(false); // Trạng thái đang xác thực liveness
-  
-  const {
-    videoRef,
-    canvasRef,
-    isCameraOn,
-    isLoadingAI,
-    faceCount,
-    error: cameraError,
-    startCamera,
-    stopCamera,
-    handleVideoPlay,
-    captureFullFrame,
-    landmarkerRef,
-  } = useFaceDetectionCamera({ initialFacingMode: "user", useLandmarker: true });
-
-  const { captureFramesWithLandmarks, checkLiveness, LIVENESS_CONFIG } = usePassiveLiveness();
+  const [isCheckingLock, setIsCheckingLock] = useState(true);
 
   const isLockedUI = failedFaceCount >= 3;
-
-  useEffect(() => {
-    if (loginMethod !== "face" || isLockedUI || isCheckingLock) {
-      stopCamera();
-    } else {
-      startCamera();
-    }
-    return () => stopCamera();
-  }, [loginMethod, isLockedUI, isCheckingLock, startCamera, stopCamera]);
-
-  useEffect(() => {
-    if (cameraError) {
-      setError(cameraError);
-    }
-  }, [cameraError]);
 
   useEffect(() => {
     if (failedFaceCount >= 3) {
@@ -126,109 +93,34 @@ export default function LoginPage() {
     }
   };
 
-  const handleFaceLogin = useCallback(async () => {
+  const handleLivenessComplete = async (sessionId: string) => {
     setError("");
-
-    // Kiểm tra FaceLandmarker đã sẵn sàng
-    if (!landmarkerRef.current || !videoRef.current) {
-      setError("AI chưa sẵn sàng. Vui lòng đợi.");
-      return;
-    }
-
-    // Kiểm tra có đúng 1 khuôn mặt trong frame hiện tại
-    const currentResult = landmarkerRef.current.detectForVideo(
-      videoRef.current,
-      performance.now()
-    );
-    const currentFaces = currentResult.faceLandmarks || [];
-
-    if (currentFaces.length === 0) {
-      setError("Không nhận diện được khuôn mặt nào. Vui lòng nhìn thẳng vào camera.");
-      return;
-    }
-    if (currentFaces.length > 1) {
-      setError(`Phát hiện ${currentFaces.length} khuôn mặt. Vui lòng đảm bảo chỉ có 1 người trong khung hình.`);
-      return;
-    }
-
-    // ── Bắt đầu Passive Liveness Check ──────────────────────────────────
-    setIsVerifying(true);
-
     try {
-      // Bước 1: Chụp nhiều frame + lấy landmarks
-      const { imageDataList, landmarksList, bestFrameCanvas } =
-        await captureFramesWithLandmarks(
-          videoRef.current,
-          landmarkerRef.current,
-          LIVENESS_CONFIG.FRAME_COUNT,
-          LIVENESS_CONFIG.FRAME_INTERVAL_MS
-        );
+      await loginLiveness(sessionId);
+      setFailedFaceCount(0);
+      localStorage.removeItem("faceLoginLockTime");
+    } catch (err: any) {
+      const isLocked = err?.response?.status === 429;
 
-      // Bước 2: Kiểm tra liveness
-      const livenessResult = checkLiveness(imageDataList, landmarksList);
-
-      console.log("[Liveness]", {
-        isLive: livenessResult.isLive,
-        passedLayers: livenessResult.passedLayers,
-        scores: livenessResult.scores,
+      setFailedFaceCount((prev) => {
+        const next = isLocked ? 3 : prev + 1;
+        if (next >= 3) {
+          const lockedUntilFromBE =
+            err?.response?.data?.data?.lockedUntil || err?.response?.data?.lockedUntil;
+          const lockedUntil = lockedUntilFromBE || Date.now() + 60 * 60 * 1000;
+          localStorage.setItem("faceLoginLockTime", lockedUntil.toString());
+        }
+        return next;
       });
 
-      if (!livenessResult.isLive) {
-        // Liveness check thất bại → ảnh tĩnh
-        setIsVerifying(false);
-        setFailedFaceCount((prev) => {
-          const next = prev + 1;
-          if (next >= 3) {
-            const lockedUntil = Date.now() + 60 * 60 * 1000;
-            localStorage.setItem("faceLoginLockTime", lockedUntil.toString());
-          }
-          return next;
-        });
-        setError(livenessResult.reason || "Xác thực thất bại. Vui lòng sử dụng khuôn mặt thật.");
-        return;
-      }
-
-      // Bước 3: Liveness passed → gửi frame tốt nhất lên Rekognition
-      if (!bestFrameCanvas) {
-        setIsVerifying(false);
-        setError("Không thể chụp ảnh. Vui lòng thử lại.");
-        return;
-      }
-
-      const imageBase64 = bestFrameCanvas.toDataURL("image/jpeg", 0.9);
-
-      try {
-        await loginFace({ imageBase64 });
-        setFailedFaceCount(0);
-        localStorage.removeItem("faceLoginLockTime");
-      } catch (err: any) {
-        const isLocked = err?.response?.status === 429;
-
-        setFailedFaceCount((prev) => {
-          const next = isLocked ? 3 : prev + 1;
-          if (next >= 3) {
-            const lockedUntilFromBE =
-              err?.response?.data?.data?.lockedUntil || err?.response?.data?.lockedUntil;
-            const lockedUntil = lockedUntilFromBE || Date.now() + 60 * 60 * 1000;
-            localStorage.setItem("faceLoginLockTime", lockedUntil.toString());
-          }
-          return next;
-        });
-
-        const msg = err?.response?.data?.message;
-        setError(Array.isArray(msg) ? msg.join(", ") : (msg ?? "Xác thực khuôn mặt thất bại."));
-      }
-    } catch (err) {
-      console.error("[Liveness Error]", err);
-      setError("Lỗi trong quá trình xác thực. Vui lòng thử lại.");
-    } finally {
-      setIsVerifying(false);
+      const msg = err?.response?.data?.message;
+      setError(Array.isArray(msg) ? msg.join(", ") : (msg ?? "Xác thực khuôn mặt thất bại."));
     }
-  }, [captureFramesWithLandmarks, checkLiveness, loginFace, landmarkerRef, videoRef, LIVENESS_CONFIG]);
+  };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
-      <div className="w-full max-w-md">
+      <div className={`w-full transition-[max-width] duration-200 ${loginMethod === "face" ? "max-w-md sm:max-w-lg" : "max-w-md"}`}>
 
         <div className="text-center mb-8">
           <div className="inline-flex w-12 h-12 bg-slate-900 rounded-xl items-center justify-center mb-4">
@@ -238,27 +130,29 @@ export default function LoginPage() {
           <p className="mt-1 text-sm text-slate-500">Hệ thống điểm danh thông minh</p>
         </div>
 
-        <div className="bg-white rounded-2xl border border-slate-200/70 shadow-sm p-8">
+        <div className="bg-white rounded-2xl border border-slate-200/70 shadow-sm p-5 sm:p-8">
           
           <div className="flex bg-slate-100 p-1 rounded-lg mb-6">
             <button
-              onClick={() => setLoginMethod("password")}
-              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
+              onClick={() => { setLoginMethod("password"); setError(""); }}
+              className={`flex flex-1 items-center justify-center gap-1.5 py-2 text-sm font-medium rounded-md transition-colors ${
                 loginMethod === "password"
                   ? "bg-white text-slate-900 shadow-sm"
                   : "text-slate-500 hover:text-slate-700"
               }`}
             >
+              <i className="ti ti-key text-base" aria-hidden="true" />
               Mật khẩu
             </button>
             <button
-              onClick={() => setLoginMethod("face")}
-              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
+              onClick={() => { setLoginMethod("face"); setError(""); }}
+              className={`flex flex-1 items-center justify-center gap-1.5 py-2 text-sm font-medium rounded-md transition-colors ${
                 loginMethod === "face"
                   ? "bg-white text-slate-900 shadow-sm"
                   : "text-slate-500 hover:text-slate-700"
               }`}
             >
+              <i className="ti ti-scan text-base" aria-hidden="true" />
               Khuôn mặt
             </button>
           </div>
@@ -305,94 +199,48 @@ export default function LoginPage() {
               </Button>
             </form>
           ) : isLockedUI ? (
-            <div className="space-y-4 flex flex-col items-center justify-center py-8">
-              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
+            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-red-100 bg-red-50/60 px-4 py-10 text-center">
+              <div className="mb-1 flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
                 <i className="ti ti-lock text-3xl text-red-600" aria-hidden="true" />
               </div>
               <h3 className="text-lg font-semibold text-slate-800">Khóa đăng nhập khuôn mặt</h3>
-              <p className="text-sm text-slate-500 text-center px-4">
-                Bạn đã nhập sai 3 lần. Chức năng đăng nhập bằng khuôn mặt đã bị khóa để bảo mật.
-                {lockTimeLeft !== null && (
-                  <span className="font-semibold text-red-600 mt-2 block">
-                    Vui lòng thử lại sau: {formatTimeLeft(lockTimeLeft)}
-                  </span>
-                )}
+              <p className="text-sm text-slate-500">
+                Bạn đã nhập sai quá nhiều lần. Chức năng đăng nhập bằng khuôn mặt đã bị khóa để bảo mật.
               </p>
+              {lockTimeLeft !== null && (
+                <span className="block font-semibold text-red-600">
+                  Vui lòng thử lại sau: {formatTimeLeft(lockTimeLeft)}
+                </span>
+              )}
               <Button
                 type="button"
                 variant="secondary"
-                className="mt-4"
+                className="mt-3"
                 onClick={() => setLoginMethod("password")}
               >
                 Đăng nhập bằng mật khẩu
               </Button>
             </div>
           ) : (
-            <div className="space-y-4 flex flex-col items-center">
-              <div className="w-full rounded-xl overflow-hidden border-2 border-slate-200 aspect-video relative bg-black flex items-center justify-center">
-                {isLoadingAI && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
-                        <span className="w-8 h-8 rounded-full border-[3px] border-slate-600 border-t-blue-400 animate-spin mb-3" />
-                        <span className="text-slate-300 text-sm font-medium">Đang tải AI...</span>
-                    </div>
-                )}
-
-                {/* Overlay khi đang xác thực liveness */}
-                {isVerifying && (
-                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 bg-black/60 rounded-full px-4 py-2">
-                        <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-emerald-400 animate-spin" />
-                        <span className="text-white text-xs font-semibold">Đang xác thực...</span>
-                    </div>
-                )}
-                
-                <video
-                    ref={videoRef}
-                    autoPlay
-                    muted
-                    playsInline
-                    onPlay={handleVideoPlay}
-                    className={`w-full h-full object-cover transition-opacity ${!isCameraOn ? "opacity-0" : (loading ? "opacity-50" : "opacity-100")}`}
-                    style={{ transform: "scaleX(-1)" }} 
+            <div className="flex flex-col items-center">
+              {isCheckingLock ? (
+                <div className="flex w-full max-w-[420px] flex-col items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 py-12">
+                  <span className="h-6 w-6 animate-spin rounded-full border-[3px] border-slate-200 border-t-emerald-500" />
+                  <p className="text-sm text-slate-500">Đang kiểm tra bảo mật...</p>
+                </div>
+              ) : loading ? (
+                <div className="flex w-full max-w-[420px] flex-col items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 py-12">
+                  <span className="h-8 w-8 animate-spin rounded-full border-[3px] border-slate-200 border-t-emerald-500" />
+                  <p className="text-sm text-slate-500">Đang đăng nhập...</p>
+                </div>
+              ) : (
+                <LecturerLivenessLogin
+                  key={`liveness-retry-${failedFaceCount}`}
+                  onLivenessComplete={handleLivenessComplete}
+                  onLivenessError={(err) => setError(err)}
+                  onCancel={() => setLoginMethod("password")}
                 />
-                <canvas
-                    ref={canvasRef}
-                    className="absolute top-0 left-0 w-full h-full object-cover pointer-events-none"
-                    style={{ transform: "scaleX(-1)" }} 
-                />
-                
-                {isCameraOn && !loading && !isVerifying && (
-                    <div className="absolute top-2 left-2 z-30">
-                        {faceCount === 1 ? (
-                            <span className="bg-emerald-500/90 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm">
-                                1 Khuôn mặt (Hợp lệ)
-                            </span>
-                        ) : faceCount > 1 ? (
-                            <span className="bg-red-500/90 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm">
-                                {faceCount} Khuôn mặt (Không hợp lệ)
-                            </span>
-                        ) : (
-                            <span className="bg-amber-500/90 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm">
-                                Chưa thấy khuôn mặt
-                            </span>
-                        )}
-                    </div>
-                )}
-              </div>
-
-              <p className="text-sm text-slate-500 text-center">
-                Vui lòng đưa 1 khuôn mặt lại gần camera để đăng nhập.
-              </p>
-              <Button
-                type="button"
-                variant="primary"
-                size="lg"
-                loading={loading || isVerifying}
-                onClick={handleFaceLogin}
-                className="w-full mt-2 shadow-md"
-                disabled={!isCameraOn || isLoadingAI || faceCount !== 1 || isVerifying}
-              >
-                {isVerifying ? "Đang xác thực..." : "Quét khuôn mặt"}
-              </Button>
+              )}
             </div>
           )}
         </div>

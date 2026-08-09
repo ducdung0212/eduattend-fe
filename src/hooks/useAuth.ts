@@ -10,6 +10,7 @@ interface UseAuthReturn {
   initializing: boolean;  // true khi đang đọc session lần đầu
   login: (payload: LoginPayload) => Promise<void>;
   loginFace: (payload: LoginFacePayload) => Promise<void>;
+  loginLiveness: (sessionId: string) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
 }
@@ -52,6 +53,18 @@ export function useAuth(): UseAuthReturn {
     }
   }, [router]);
 
+  const loginLiveness = useCallback(async (sessionId: string) => {
+    setLoading(true);
+    try {
+      const { loginLiveness: loginLivenessApi } = await import('@/lib/auth');
+      const res = await loginLivenessApi(sessionId);
+      setUser(res.user);
+      router.push(getDefaultPath(res.user.role));
+    } finally {
+      setLoading(false);
+    }
+  }, [router]);
+
   const logout = useCallback(() => {
     logoutApi();
     setUser(null);
@@ -64,6 +77,7 @@ export function useAuth(): UseAuthReturn {
     initializing,
     login,
     loginFace,
+    loginLiveness,
     logout,
     isAuthenticated: user !== null,
   };

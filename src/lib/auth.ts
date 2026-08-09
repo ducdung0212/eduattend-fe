@@ -71,6 +71,35 @@ export async function loginFace(payload: LoginFacePayload): Promise<LoginRespons
   return normalized;
 }
 
+export async function createLivenessSession(): Promise<string> {
+  const { data } = await api.post<{ data: { sessionId: string } }>('/auth/liveness-session');
+  return data.data ? data.data.sessionId : (data as unknown as { sessionId: string }).sessionId;
+}
+
+export async function loginLiveness(sessionId: string): Promise<LoginResponse> {
+  const { data: resData } = await api.post<{ data: { access_token: string; refresh_token: string; user: User } }>(
+    '/auth/liveness-login',
+    { sessionId },
+  );
+
+  const data = resData.data || (resData as any);
+
+  const normalized: LoginResponse = {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token,
+    user: data.user,
+  };
+
+  if (typeof window !== 'undefined') {
+    setCookie('access_token', normalized.accessToken, COOKIE_EXPIRES_DAYS);
+    setCookie('refresh_token', normalized.refreshToken, COOKIE_EXPIRES_DAYS);
+    setCookie('user_role', normalized.user.role, COOKIE_EXPIRES_DAYS);
+    setCookie('user_info', JSON.stringify(normalized.user), COOKIE_EXPIRES_DAYS);
+  }
+
+  return normalized;
+}
+
 export async function checkFaceLock(): Promise<{ isLocked: boolean; lockedUntil?: number }> {
   try {
     const { data } = await api.get(`/auth/check-face-lock?t=${Date.now()}`);

@@ -40,7 +40,7 @@ api.interceptors.response.use(
     const original = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
     // Không tự động refresh token nếu đó là request login
-    if (original.url === '/auth/login' || original.url === '/auth/login-face') {
+    if (original.url === '/auth/login' || original.url === '/auth/login-face' || original.url === '/auth/liveness-login') {
       return Promise.reject(error);
     }
 
