@@ -135,7 +135,11 @@ export function StudentFormModal({ open, student, onClose, onSuccess }: StudentF
                 const res = await api.get("/classes", {
                     params: { faculty_code: selectedFacultyCode }
                 });
-                setClasses(res.data?.data);
+                const fetchedClasses = res.data?.data || [];
+                const sortedClasses = [...fetchedClasses].sort((a: Class, b: Class) => 
+                    a.class_code.localeCompare(b.class_code)
+                );
+                setClasses(sortedClasses);
             } catch (e) {
                 console.error(e);
             }

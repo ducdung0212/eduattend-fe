@@ -1,4 +1,4 @@
-import { AuthSession, LoginPayload, LoginFacePayload, LoginResponse, User } from '@/types';
+import { AuthSession, LoginPayload, LoginResponse, User } from '@/types';
 import api from './api';
 
 const COOKIE_EXPIRES_DAYS = 3;
@@ -47,29 +47,6 @@ export async function login(payload: LoginPayload): Promise<LoginResponse> {
   return normalized;
 }
 
-export async function loginFace(payload: LoginFacePayload): Promise<LoginResponse> {
-  const { data: resData } = await api.post<{ data: { access_token: string; refresh_token: string; user: User } }>(
-    '/auth/login-face',
-    payload,
-  );
-
-  const data = resData.data;
-
-  const normalized: LoginResponse = {
-    accessToken: data.access_token,
-    refreshToken: data.refresh_token,
-    user: data.user,
-  };
-
-  if (typeof window !== 'undefined') {
-    setCookie('access_token', normalized.accessToken, COOKIE_EXPIRES_DAYS);
-    setCookie('refresh_token', normalized.refreshToken, COOKIE_EXPIRES_DAYS);
-    setCookie('user_role', normalized.user.role, COOKIE_EXPIRES_DAYS);
-    setCookie('user_info', JSON.stringify(normalized.user), COOKIE_EXPIRES_DAYS);
-  }
-
-  return normalized;
-}
 
 export async function createLivenessSession(): Promise<string> {
   const { data } = await api.post<{ data: { sessionId: string } }>('/auth/liveness-session');

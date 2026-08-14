@@ -1,15 +1,14 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { User, LoginPayload, LoginFacePayload } from '@/types';
-import { login as loginApi, loginFace as loginFaceApi, logout as logoutApi, getCurrentUser, getDefaultPath } from '@/lib/auth';
+import { User, LoginPayload } from '@/types';
+import { login as loginApi, logout as logoutApi, getCurrentUser, getDefaultPath } from '@/lib/auth';
 
 interface UseAuthReturn {
   user: User | null;
   loading: boolean;       // true chỉ khi đang gọi API login
   initializing: boolean;  // true khi đang đọc session lần đầu
   login: (payload: LoginPayload) => Promise<void>;
-  loginFace: (payload: LoginFacePayload) => Promise<void>;
   loginLiveness: (sessionId: string) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
@@ -42,16 +41,6 @@ export function useAuth(): UseAuthReturn {
     }
   }, [router]);
 
-  const loginFace = useCallback(async (payload: LoginFacePayload) => {
-    setLoading(true);
-    try {
-      const res = await loginFaceApi(payload);
-      setUser(res.user);
-      router.push(getDefaultPath(res.user.role));
-    } finally {
-      setLoading(false);
-    }
-  }, [router]);
 
   const loginLiveness = useCallback(async (sessionId: string) => {
     setLoading(true);
@@ -76,7 +65,6 @@ export function useAuth(): UseAuthReturn {
     loading,
     initializing,
     login,
-    loginFace,
     loginLiveness,
     logout,
     isAuthenticated: user !== null,
