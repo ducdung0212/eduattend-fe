@@ -224,11 +224,11 @@ export function useFaceDetectionCamera(
                                     if (px > maxX) maxX = px;
                                     if (py > maxY) maxY = py;
                                 }
-                                // Thu nhỏ 10% cho đẹp
+                                // Mở rộng thêm 5% mỗi cạnh để viền bao rộng hơn
                                 const w = maxX - minX;
                                 const h = maxY - minY;
-                                const shrinkX = w * 0.1;
-                                const shrinkY = h * 0.1;
+                                const shrinkX = -w * 0.05; // Số âm = mở rộng ra
+                                const shrinkY = -h * 0.05;
 
                                 ctx.strokeStyle = "#22c55e";
                                 ctx.lineWidth = 3;
@@ -251,9 +251,10 @@ export function useFaceDetectionCamera(
                                 const { originX, originY, width, height } = det.boundingBox;
                                 
                                 // Model full_range trả về bounding box bao toàn bộ vùng đầu khá to
-                                // Thu nhỏ 15% mỗi cạnh để khung xanh lá cây bám sát khuôn mặt hơn (UI đẹp hơn)
-                                const shrinkX = width * 0.15;
-                                const shrinkY = height * 0.15;
+                                // Mở rộng ra bằng cách giảm độ thu nhỏ (từ 0.15 xuống 0.05)
+                                // Số càng nhỏ thì viền càng rộng ra
+                                const shrinkX = width * 0.05;
+                                const shrinkY = height * 0.05;
                                 
                                 const x = (originX + shrinkX) * scaleX;
                                 const y = (originY + shrinkY) * scaleY;

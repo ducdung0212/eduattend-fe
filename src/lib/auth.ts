@@ -1,25 +1,24 @@
 import { AuthSession, LoginPayload, LoginResponse, User } from '@/types';
 import api from './api';
 
+import Cookies from 'js-cookie';
+
 const COOKIE_EXPIRES_DAYS = 3;
 
-/** Set cookie helper (không cần js-cookie) */
+/** Set cookie helper (sử dụng js-cookie) */
 export function setCookie(name: string, value: string, days: number) {
-  if (typeof document === 'undefined') return;
-  const expires = new Date(Date.now() + days * 864e5).toUTCString();
-  document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
+  if (typeof window === 'undefined') return;
+  Cookies.set(name, value, { expires: days, path: '/', sameSite: 'Lax' });
 }
 
 export function deleteCookie(name: string) {
-  if (typeof document === 'undefined') return;
-  document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+  if (typeof window === 'undefined') return;
+  Cookies.remove(name, { path: '/' });
 }
 
 export function getCookie(name: string): string | null {
-  if (typeof document === 'undefined') return null;
-  const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
-  if (match) return decodeURIComponent(match[2]);
-  return null;
+  if (typeof window === 'undefined') return null;
+  return Cookies.get(name) ?? null;
 }
 
 // ── Đăng nhập ────────────────────────────────────────────────
