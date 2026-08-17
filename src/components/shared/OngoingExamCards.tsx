@@ -109,14 +109,7 @@ export function OngoingExamCards({ onSelectSchedule, lecturerCode, variant = "ad
                             ))}
                         </select>
                     </div>
-                    <button
-                        onClick={fetchOngoing}
-                        disabled={loading}
-                        className="h-9 w-9 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
-                        title="Tải lại"
-                    >
-                        <i className={`ti ti-refresh text-lg ${loading ? 'animate-spin' : ''}`} />
-                    </button>
+
                 </div>
             )}
 
@@ -132,7 +125,7 @@ export function OngoingExamCards({ onSelectSchedule, lecturerCode, variant = "ad
                         <i className="ti ti-clock-off text-4xl text-slate-300" />
                     </div>
                     <div className="font-medium text-slate-600">Không có ca thi nào đang diễn ra</div>
-                    <div className="text-slate-400 text-xs">Bạn có thể nhấn nút tải lại để kiểm tra nếu có ca thi mới</div>
+                    <div className="text-slate-400 text-xs">Hệ thống sẽ tự động hiển thị khi có ca thi mới bắt đầu</div>
                 </div>
             ) : (
                 <div className="space-y-6">
