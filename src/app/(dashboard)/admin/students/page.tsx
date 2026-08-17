@@ -6,7 +6,7 @@ import { SearchBar } from "@/components/shared/SearchBar";
 import { Button } from "@/components/ui/Button";
 import { usePagination } from "@/hooks/usePagination";
 import api from "@/lib/api";
-import { PaginationMeta, Faculty, Class } from "@/types";
+import { PaginationMeta, Faculty, Class, Student } from "@/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { StudentFormModal } from "./_components/StudentFormModal";
@@ -15,7 +15,7 @@ import { Modal } from "@/components/ui/Modal";
 import { fullName } from "@/lib/utils";
 import { IconCheck } from "@tabler/icons-react";
 
-const LIMIT = 20;
+const LIMIT = 10;
 
 export default function StudentManagementPage() {
     // --- State Modals ---
@@ -183,7 +183,7 @@ export default function StudentManagementPage() {
     };
 
     // --- Columns Cấu hình ---
-    const columns: Column<any>[] = useMemo(() => [
+    const columns: Column<Student>[] = useMemo(() => [
         {
             key: "student_code",
             label: "Mã sinh viên",

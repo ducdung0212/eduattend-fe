@@ -142,9 +142,6 @@ export function LecturerLivenessLogin({
 
   return (
     <div className="w-full max-w-[420px]">
-      <p className="mb-3 text-center text-sm text-slate-500">
-        Đưa khuôn mặt vào giữa khung hình và giữ yên
-      </p>
       <style dangerouslySetInnerHTML={{ __html: `
         /* Ép tất cả các lớp vỏ bọc ngoài cùng giãn to hết cỡ (100% của 550px) */
         .my-liveness-wrapper > div,
