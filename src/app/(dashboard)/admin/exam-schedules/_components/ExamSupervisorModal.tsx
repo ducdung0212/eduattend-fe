@@ -148,10 +148,11 @@ export function ExamSupervisorModal({ open, examSchedule, onClose, onSuccess }: 
     // --- Xóa nhiều giám thị ---
     const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
     const [bulkDeleting, setBulkDeleting] = useState(false);
+    const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
 
     const handleBulkDelete = async () => {
         if (selectedKeys.length === 0) return;
-        if (!confirm(`Bạn có chắc chắn muốn xóa ${selectedKeys.length} giám thị đã chọn khỏi ca thi không?`)) return;
+        setBulkDeleteModalOpen(false);
 
         setBulkDeleting(true);
         try {
@@ -288,7 +289,7 @@ export function ExamSupervisorModal({ open, examSchedule, onClose, onSuccess }: 
                 <div className="flex justify-between items-center mt-4 mb-2">
                     <h4 className="text-sm font-medium text-slate-800">Giám thị đã phân công</h4>
                     {selectedKeys.length > 0 && (
-                        <Button variant="danger" size="sm" leftIcon="trash" onClick={handleBulkDelete} loading={bulkDeleting}>
+                        <Button variant="danger" size="sm" leftIcon="trash" onClick={() => setBulkDeleteModalOpen(true)} loading={bulkDeleting}>
                             Xóa {selectedKeys.length} mục
                         </Button>
                     )}
@@ -306,6 +307,27 @@ export function ExamSupervisorModal({ open, examSchedule, onClose, onSuccess }: 
                     />
                 </div>
             </div>
+
+            <Modal
+                open={bulkDeleteModalOpen}
+                onClose={() => setBulkDeleteModalOpen(false)}
+                title="Xác nhận xóa hàng loạt"
+                size="sm"
+                footer={
+                    <>
+                        <Button variant="secondary" onClick={() => setBulkDeleteModalOpen(false)}>
+                            Hủy
+                        </Button>
+                        <Button variant="danger" loading={bulkDeleting} onClick={handleBulkDelete}>
+                            Xóa {selectedKeys.length} mục
+                        </Button>
+                    </>
+                }
+            >
+                <p className="text-sm text-slate-600">
+                    Bạn có chắc chắn muốn xóa <span className="font-semibold text-slate-900">{selectedKeys.length}</span> giám thị đã chọn khỏi ca thi không? Hành động này không thể hoàn tác.
+                </p>
+            </Modal>
         </Modal>
     );
 }

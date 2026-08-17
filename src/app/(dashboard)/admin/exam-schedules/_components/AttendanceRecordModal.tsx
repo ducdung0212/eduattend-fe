@@ -30,6 +30,7 @@ export function AttendanceRecordModal({ open, examSchedule, onClose, onSuccess }
     const [codesInput, setCodesInput] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [importModalOpen, setImportModalOpen] = useState(false);
+    const [confirmMessage, setConfirmMessage] = useState<string | null>(null);
 
     const examScheduleId = examSchedule?.id;
 
@@ -70,7 +71,7 @@ export function AttendanceRecordModal({ open, examSchedule, onClose, onSuccess }
     }, [open, fetchRecords, search, page]);
 
     // --- Thêm sinh viên (1 hoặc nhiều mã SV) ---
-    const handleAdd = async () => {
+    const handleAdd = async (force_capacity_override: boolean = false) => {
         if (!examScheduleId) return;
 
         const codes = Array.from(
@@ -91,6 +92,7 @@ export function AttendanceRecordModal({ open, examSchedule, onClose, onSuccess }
             const res = await api.post("/attendance-records/bulk", {
                 exam_schedule_id: examScheduleId,
                 student_codes: codes,
+                force_capacity_override,
             });
 
             const success: { student_code: string; id: string }[] = res.data?.data?.success ?? [];
@@ -130,6 +132,10 @@ export function AttendanceRecordModal({ open, examSchedule, onClose, onSuccess }
                 onSuccess?.();
             }
         } catch (err: any) {
+            if (err.response?.data?.require_confirmation) {
+                setConfirmMessage(err.response.data.message);
+                return;
+            }
             const msg = err.response?.data?.message || err.message;
             toast.error(Array.isArray(msg) ? msg.join(", ") : msg);
         } finally {
@@ -153,10 +159,11 @@ export function AttendanceRecordModal({ open, examSchedule, onClose, onSuccess }
     // --- Xóa nhiều sinh viên ---
     const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
     const [bulkDeleting, setBulkDeleting] = useState(false);
+    const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
 
     const handleBulkDelete = async () => {
         if (selectedKeys.length === 0) return;
-        if (!confirm(`Bạn có chắc chắn muốn xóa ${selectedKeys.length} sinh viên đã chọn khỏi danh sách thi không?`)) return;
+        setBulkDeleteModalOpen(false);
 
         setBulkDeleting(true);
         try {
@@ -251,7 +258,7 @@ export function AttendanceRecordModal({ open, examSchedule, onClose, onSuccess }
                         <Button
                             variant="primary"
                             loading={submitting}
-                            onClick={handleAdd}
+                            onClick={() => handleAdd(false)}
                             className="self-stretch"
                         >
                             Thêm
@@ -283,7 +290,7 @@ export function AttendanceRecordModal({ open, examSchedule, onClose, onSuccess }
                     </div>
                     {selectedKeys.length > 0 && (
                         <div className="pt-5">
-                            <Button variant="danger" size="sm" leftIcon="trash" onClick={handleBulkDelete} loading={bulkDeleting}>
+                            <Button variant="danger" size="sm" leftIcon="trash" onClick={() => setBulkDeleteModalOpen(true)} loading={bulkDeleting}>
                                 Xóa {selectedKeys.length} mục
                             </Button>
                         </div>
@@ -326,6 +333,52 @@ export function AttendanceRecordModal({ open, examSchedule, onClose, onSuccess }
                 title="Import danh sách sinh viên"
                 endpoint={examScheduleId ? `/attendance-records/import/${examScheduleId}` : ""}
             />
+
+            <Modal
+                open={!!confirmMessage}
+                onClose={() => setConfirmMessage(null)}
+                title="Cảnh báo quá tải phòng thi"
+                size="sm"
+                footer={
+                    <>
+                        <Button variant="secondary" onClick={() => setConfirmMessage(null)}>Hủy</Button>
+                        <Button variant="danger" onClick={() => {
+                            setConfirmMessage(null);
+                            handleAdd(true);
+                        }}>Vẫn thêm</Button>
+                    </>
+                }
+            >
+                <div className="flex flex-col items-center justify-center py-4 text-center">
+                    <div className="w-12 h-12 rounded-full bg-yellow-100 flex items-center justify-center mb-4">
+                        <i className="ti ti-alert-triangle text-2xl text-yellow-600"></i>
+                    </div>
+                    <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">
+                        {confirmMessage}
+                    </p>
+                </div>
+            </Modal>
+            
+            <Modal
+                open={bulkDeleteModalOpen}
+                onClose={() => setBulkDeleteModalOpen(false)}
+                title="Xác nhận xóa hàng loạt"
+                size="sm"
+                footer={
+                    <>
+                        <Button variant="secondary" onClick={() => setBulkDeleteModalOpen(false)}>
+                            Hủy
+                        </Button>
+                        <Button variant="danger" loading={bulkDeleting} onClick={handleBulkDelete}>
+                            Xóa {selectedKeys.length} mục
+                        </Button>
+                    </>
+                }
+            >
+                <p className="text-sm text-slate-600">
+                    Bạn có chắc chắn muốn xóa <span className="font-semibold text-slate-900">{selectedKeys.length}</span> sinh viên đã chọn khỏi danh sách thi không? Hành động này không thể hoàn tác.
+                </p>
+            </Modal>
         </Modal>
     );
 }

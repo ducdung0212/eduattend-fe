@@ -219,11 +219,11 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
         setIsSearchingSubject(true);
         try {
             const res = await api.get("/subjects", {
-                params: { 
-                    search: subjectSearch, 
+                params: {
+                    search: subjectSearch,
                     limit: 10,
-                    semester: (selectedPeriod?.semester_number === 1 || selectedPeriod?.semester_number === 2) 
-                        ? selectedPeriod.semester_number 
+                    semester: (selectedPeriod?.semester_number === 1 || selectedPeriod?.semester_number === 2)
+                        ? selectedPeriod.semester_number
                         : undefined
                 },
             });
@@ -277,6 +277,35 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
     // --- Submit ---
     const handleSubmit = async (e: React.SyntheticEvent) => {
         e.preventDefault();
+
+        // Validation: Ràng buộc giờ thi từ 7:00 AM đến 18:00 PM
+        if (examTime) {
+            const [h, m] = examTime.split(":").map(Number);
+            const startMinutes = h * 60 + m;
+            const endMinutes = startMinutes + formData.duration;
+
+            const minAllowed = 7 * 60; // 7:00 AM
+            const maxAllowed = 18 * 60; // 18:00 PM
+
+            if (formData.duration < 45) {
+                toast.error("Thời lượng thi không được nhỏ hơn 45 phút.");
+                return;
+            }
+            if (formData.duration > 180) {
+                toast.error("Thời lượng thi không được vượt quá 180 phút.");
+                return;
+            }
+
+            if (startMinutes <= minAllowed) {
+                toast.error("Giờ bắt đầu không hợp lệ! Ca thi phải bắt đầu sau 07:00 sáng.");
+                return;
+            }
+            if (endMinutes >= maxAllowed) {
+                toast.error(`Thời lượng không hợp lệ! Ca thi kéo dài đến ${Math.floor(endMinutes / 60).toString().padStart(2, '0')}:${(endMinutes % 60).toString().padStart(2, '0')}, vượt quá giới hạn (phải kết thúc trước 18:00).`);
+                return;
+            }
+        }
+
         setSubmitting(true);
         try {
             const payload = {

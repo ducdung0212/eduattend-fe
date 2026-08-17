@@ -32,6 +32,7 @@ export function ImportModal({
 }: ImportModalProps) {
     const [file, setFile] = useState<File | null>(null);
     const [loading, setLoading] = useState(false);
+    const [confirmMessage, setConfirmMessage] = useState<string | null>(null);
 
     // Reset file khi mở lại modal
     useEffect(() => {
@@ -124,11 +125,14 @@ export function ImportModal({
         }
     };
 
-    const handleImport = async () => {
+    const handleImport = async (force: boolean = false) => {
         if (!file) return toast.error("Vui lòng chọn file excel");
 
         const formData = new FormData();
         formData.append("file", file);
+        if (force) {
+            formData.append("force_capacity_override", "true");
+        }
         
         if (extraPayload) {
             Object.entries(extraPayload).forEach(([key, value]) => {
@@ -158,6 +162,11 @@ export function ImportModal({
             onClose();
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (err: any) {
+            if (err.response?.data?.require_confirmation) {
+                setConfirmMessage(err.response.data.message);
+                setLoading(false);
+                return;
+            }
             const msg = err.response?.data?.message || "Lỗi khi import dữ liệu";
             toast.error(Array.isArray(msg) ? msg.join(", ") : msg);
             
@@ -180,7 +189,7 @@ export function ImportModal({
             footer={
                 <>
                     <Button variant="secondary" onClick={onClose} disabled={loading}>Hủy</Button>
-                    <Button variant="primary" loading={loading} disabled={isSubmitDisabled} onClick={handleImport}>Bắt đầu Import</Button>
+                    <Button variant="primary" loading={loading} disabled={isSubmitDisabled} onClick={() => handleImport(false)}>Bắt đầu Import</Button>
                 </>
             }
         >
@@ -213,6 +222,31 @@ export function ImportModal({
                 
                 {children}
             </div>
+
+            <Modal
+                open={!!confirmMessage}
+                onClose={() => setConfirmMessage(null)}
+                title="Cảnh báo quá tải phòng thi"
+                size="sm"
+                footer={
+                    <>
+                        <Button variant="secondary" onClick={() => setConfirmMessage(null)}>Hủy</Button>
+                        <Button variant="danger" onClick={() => {
+                            setConfirmMessage(null);
+                            handleImport(true);
+                        }}>Tiếp tục Import</Button>
+                    </>
+                }
+            >
+                <div className="flex flex-col items-center justify-center py-4 text-center">
+                    <div className="w-12 h-12 rounded-full bg-yellow-100 flex items-center justify-center mb-4">
+                        <i className="ti ti-alert-triangle text-2xl text-yellow-600"></i>
+                    </div>
+                    <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">
+                        {confirmMessage}
+                    </p>
+                </div>
+            </Modal>
         </Modal>
     );
 }

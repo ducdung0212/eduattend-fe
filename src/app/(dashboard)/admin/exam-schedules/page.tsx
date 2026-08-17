@@ -5,7 +5,7 @@ import { Modal } from "@/components/ui/Modal";
 import api from "@/lib/api";
 import { todayString, formatDateVN, addDays, formatTime, toYMD } from "@/lib/utils";
 import { Semester, ExamSchedule } from "@/types";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { ExamScheduleFormModal } from "./_components/ExamScheduleFormModal";
 import { DatePickerWithHighlight } from "./_components/DatePickerWithHighlight";
@@ -37,6 +37,7 @@ export default function ExamScheduleManagementPage() {
     // --- State Bulk Delete ---
     const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
     const [bulkDeleting, setBulkDeleting] = useState(false);
+    const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
 
     // --- State Data ---
     const [examSchedules, setExamSchedules] = useState<ExamSchedule[]>([]);
@@ -74,33 +75,33 @@ export default function ExamScheduleManagementPage() {
                 limit: 1000,
             },
         })
-        .then((res) => {
-            const schedules = res.data?.data || [];
-            // Lọc các ngày và sort giảm dần để lấy ngày mới nhất
-            const dates = Array.from(
-                new Set(
-                    schedules
-                        .filter((s: ExamSchedule) => s.start_time)
-                        .map((s: ExamSchedule) => toYMD(s.start_time))
-                )
-            ).sort((a, b) => (b as string).localeCompare(a as string)) as string[];
-            
-            setPeriodHighlightedDates(dates);
+            .then((res) => {
+                const schedules = res.data?.data || [];
+                // Lọc các ngày và sort giảm dần để lấy ngày mới nhất
+                const dates = Array.from(
+                    new Set(
+                        schedules
+                            .filter((s: ExamSchedule) => s.start_time)
+                            .map((s: ExamSchedule) => toYMD(s.start_time))
+                    )
+                ).sort((a, b) => (b as string).localeCompare(a as string)) as string[];
 
-            // Tự động chuyển sang ngày có ca thi mới nhất
-            if (dates.length > 0) {
-                setGridDate(dates[0]);
-            } else if (selectedSemesterId) {
-                // Nếu học kì rỗng, về ngày bắt đầu học kì
-                const p = semesters.find(x => x.id === selectedSemesterId);
-                if (p && p.start_date) setGridDate(toYMD(p.start_date));
-            } else {
-                // Nếu 'Tất cả' rỗng, về hôm nay
-                setGridDate(todayString());
-            }
-        })
-        .catch((e) => console.error("Lỗi lấy danh sách ngày có ca thi", e))
-        .finally(() => setIsDateResolved(true));
+                setPeriodHighlightedDates(dates);
+
+                // Tự động chuyển sang ngày có ca thi mới nhất
+                if (dates.length > 0) {
+                    setGridDate(dates[0]);
+                } else if (selectedSemesterId) {
+                    // Nếu học kì rỗng, về ngày bắt đầu học kì
+                    const p = semesters.find(x => x.id === selectedSemesterId);
+                    if (p && p.start_date) setGridDate(toYMD(p.start_date));
+                } else {
+                    // Nếu 'Tất cả' rỗng, về hôm nay
+                    setGridDate(todayString());
+                }
+            })
+            .catch((e) => console.error("Lỗi lấy danh sách ngày có ca thi", e))
+            .finally(() => setIsDateResolved(true));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedSemesterId]);
 
@@ -159,8 +160,8 @@ export default function ExamScheduleManagementPage() {
 
     const handleBulkDelete = async () => {
         if (selectedKeys.length === 0) return;
-        if (!confirm(`Bạn có chắc chắn muốn xóa ${selectedKeys.length} lịch thi đã chọn không?`)) return;
-        
+        setBulkDeleteConfirm(false);
+
         setBulkDeleting(true);
         try {
             const res = await api.post("/exam-schedules/bulk-delete", { ids: selectedKeys });
@@ -190,6 +191,14 @@ export default function ExamScheduleManagementPage() {
     const canGoPrevDay = !selectedSemester || gridDate > toYMD(selectedSemester.start_date);
     const canGoNextDay = !selectedSemester || gridDate < toYMD(selectedSemester.end_date);
 
+    // Thống kê nhanh cho ngày đang xem
+    const dailyStats = useMemo(() => {
+        const totalSchedules = examSchedules.length;
+        const roomSet = new Set(examSchedules.map(s => s.room?.room_code).filter(Boolean));
+        const totalStudents = examSchedules.reduce((sum, s) => sum + (s.attendance_count ?? 0), 0);
+        return { totalSchedules, totalRooms: roomSet.size, totalStudents };
+    }, [examSchedules]);
+
     const handleExportPeriod = async () => {
         if (!exportSelectedSemesterId) {
             toast.error("Vui lòng chọn học kì");
@@ -218,7 +227,7 @@ export default function ExamScheduleManagementPage() {
                     params: { exam_schedule_id: sch.id, limit: 100 },
                 });
                 const rawRecords = resRecords.data?.data as any[] || [];
-                
+
                 // Sắp xếp ưu tiên: Lớp -> Tên -> Họ
                 const records = [...rawRecords].sort((a, b) => {
                     const classA = a.student?.class?.name || a.student?.class?.class_code || "";
@@ -270,7 +279,7 @@ export default function ExamScheduleManagementPage() {
                 aoaData.push([{ v: "Thời gian:", t: "s", s: infoStyle }, { v: `${sch.start_time ? formatTime(sch.start_time) : ""} (${sch.duration || 120} phút)` }]);
                 aoaData.push([{ v: "Nhóm/Ca thi:", t: "s", s: infoStyle }, { v: sch.group || "" }]);
                 aoaData.push([
-                    { v: "Giám thị:", t: "s", s: { font: { bold: true }, alignment: { vertical: "top", horizontal: "left" } } }, 
+                    { v: "Giám thị:", t: "s", s: { font: { bold: true }, alignment: { vertical: "top", horizontal: "left" } } },
                     { v: supervisorNames, t: "s", s: { alignment: { wrapText: true, horizontal: "left", vertical: "top" } } }
                 ]);
                 aoaData.push([]);
@@ -327,7 +336,7 @@ export default function ExamScheduleManagementPage() {
                 });
 
                 const ws = XLSX.utils.aoa_to_sheet(aoaData);
-                
+
                 // Cập nhật font chữ Times New Roman cho tất cả các cell
                 for (const cell in ws) {
                     if (cell[0] === '!') continue;
@@ -359,7 +368,7 @@ export default function ExamScheduleManagementPage() {
                     { wch: 18 }, // Thời gian
                     { wch: 16 }, // Ghi chú
                 ];
-                
+
                 ws['!rows'] = [];
                 ws['!rows'][8] = { hpt: 16 * Math.max(1, sch.supervisors?.length || 1) }; // row 8 height
 
@@ -368,7 +377,7 @@ export default function ExamScheduleManagementPage() {
 
                 let sheetName = `${sch.subject?.subject_code || "M"}_P${sch.room?.room_code || "X"}_Ca${sch.group || 1}`;
                 if (sheetName.length > 31) sheetName = sheetName.substring(0, 31);
-                
+
                 let finalSheetName = sheetName;
                 let counter = 1;
                 while (wb.SheetNames.includes(finalSheetName)) {
@@ -477,7 +486,7 @@ export default function ExamScheduleManagementPage() {
                                             size="sm"
                                             leftIcon="trash"
                                             loading={bulkDeleting}
-                                            onClick={handleBulkDelete}
+                                            onClick={() => setBulkDeleteConfirm(true)}
                                         >
                                             Xóa {selectedKeys.length} mục
                                         </Button>
@@ -497,6 +506,26 @@ export default function ExamScheduleManagementPage() {
                                     {"-"}
                                     {new Date(selectedSemester.end_date).toLocaleDateString("vi-VN")}
                                 </span>
+                            </div>
+                        )}
+
+                        {/* Thống kê nhanh */}
+                        {!loading && examSchedules.length > 0 && (
+                            <div className="flex items-center gap-4 px-4 py-2 border-b border-slate-100 text-xs text-slate-500">
+                                <div className="flex items-center gap-1.5">
+                                    <i className="ti ti-chart-bar text-slate-400" />
+                                    <span className="font-medium text-slate-700">{dailyStats.totalSchedules}</span> ca thi
+                                </div>
+                                <div className="w-px h-3 bg-slate-200" />
+                                <div className="flex items-center gap-1.5">
+                                    <i className="ti ti-door text-slate-400" />
+                                    <span className="font-medium text-slate-700">{dailyStats.totalRooms}</span> phòng
+                                </div>
+                                <div className="w-px h-3 bg-slate-200" />
+                                <div className="flex items-center gap-1.5">
+                                    <i className="ti ti-users text-slate-400" />
+                                    <span className="font-medium text-slate-700">{dailyStats.totalStudents}</span> thí sinh
+                                </div>
                             </div>
                         )}
 
@@ -602,6 +631,22 @@ export default function ExamScheduleManagementPage() {
                     Bạn có chắc chắn muốn xóa lịch thi môn{" "}
                     <span className="font-semibold text-slate-900">{scheduleToDelete?.subject?.name}</span>{" "}
                     nhóm <span className="font-semibold text-slate-900">{scheduleToDelete?.group}</span> không? Hành động này không thể hoàn tác.
+                </p>
+            </Modal>
+            <Modal
+                open={bulkDeleteConfirm}
+                onClose={() => setBulkDeleteConfirm(false)}
+                title="Xác nhận xóa hàng loạt"
+                size="sm"
+                footer={
+                    <>
+                        <Button variant="secondary" onClick={() => setBulkDeleteConfirm(false)}>Hủy</Button>
+                        <Button variant="danger" loading={bulkDeleting} onClick={handleBulkDelete}>Xóa {selectedKeys.length} mục</Button>
+                    </>
+                }
+            >
+                <p className="text-sm text-slate-600">
+                    Bạn có chắc chắn muốn xóa <span className="font-semibold text-slate-900">{selectedKeys.length}</span> lịch thi đã chọn không? Hành động này không thể hoàn tác.
                 </p>
             </Modal>
         </div>

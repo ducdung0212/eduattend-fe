@@ -135,10 +135,11 @@ export function SemesterManagerModal({ open, onClose, onSuccess }: SemesterManag
     // ── Bulk Delete ──────────────────────────────────────────────
     const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
     const [bulkDeleting, setBulkDeleting] = useState(false);
+    const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
 
     const handleBulkDelete = async () => {
         if (selectedKeys.length === 0) return;
-        if (!confirm(`Bạn có chắc chắn muốn xóa ${selectedKeys.length} học kì đã chọn? Các ca thi thuộc các học kì này sẽ bị gỡ liên kết.`)) return;
+        setBulkDeleteModalOpen(false);
         
         setBulkDeleting(true);
         try {
@@ -196,7 +197,7 @@ export function SemesterManagerModal({ open, onClose, onSuccess }: SemesterManag
                                 size="sm"
                                 leftIcon="trash"
                                 loading={bulkDeleting}
-                                onClick={handleBulkDelete}
+                                onClick={() => setBulkDeleteModalOpen(true)}
                             >
                                 Xóa {selectedKeys.length} mục
                             </Button>
@@ -387,6 +388,27 @@ export function SemesterManagerModal({ open, onClose, onSuccess }: SemesterManag
                     </Button>
                 )}
             </div>
+
+            <Modal
+                open={bulkDeleteModalOpen}
+                onClose={() => setBulkDeleteModalOpen(false)}
+                title="Xác nhận xóa hàng loạt"
+                size="sm"
+                footer={
+                    <>
+                        <Button variant="secondary" onClick={() => setBulkDeleteModalOpen(false)}>
+                            Hủy
+                        </Button>
+                        <Button variant="danger" loading={bulkDeleting} onClick={handleBulkDelete}>
+                            Xóa {selectedKeys.length} mục
+                        </Button>
+                    </>
+                }
+            >
+                <p className="text-sm text-slate-600">
+                    Bạn có chắc chắn muốn xóa <span className="font-semibold text-slate-900">{selectedKeys.length}</span> học kì đã chọn không? Hành động này không thể hoàn tác.
+                </p>
+            </Modal>
         </Modal>
     );
 }

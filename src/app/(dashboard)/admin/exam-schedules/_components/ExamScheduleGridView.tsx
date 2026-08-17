@@ -21,36 +21,73 @@ interface Props {
 // ─── Constants ────────────────────────────────────────────────────────────────
 const ROOMS_PER_PAGE = 5;
 
-const CARD_COLORS = [
-    { bg: "#e8f0fe", border: "#1a73e8", subject: "#174ea6", code: "#1967d2", badgeSv: "#d2e3fc", badgeSvText: "#174ea6" },
-    { bg: "#e6f4ea", border: "#1e8e3e", subject: "#137333", code: "#1e8e3e", badgeSv: "#ceead6", badgeSvText: "#137333" },
-    { bg: "#fef7e0", border: "#e37400", subject: "#b06000", code: "#e37400", badgeSv: "#feefc3", badgeSvText: "#b06000" },
-    { bg: "#eee8fb", border: "#7c4dff", subject: "#5e35b1", code: "#7c4dff", badgeSv: "#e1d8f6", badgeSvText: "#5e35b1" },
-    { bg: "#fce8e6", border: "#d93025", subject: "#b31412", code: "#d93025", badgeSv: "#f8d7da", badgeSvText: "#b31412" },
+const PASTEL_COLORS = [
+    { bg: "bg-blue-50", borderL: "border-l-blue-500", text: "text-blue-900", dot: "bg-blue-500", badgeBg: "bg-blue-100", badgeText: "text-blue-700" },
+    { bg: "bg-teal-50", borderL: "border-l-teal-500", text: "text-teal-900", dot: "bg-teal-500", badgeBg: "bg-teal-100", badgeText: "text-teal-700" },
+    { bg: "bg-purple-50", borderL: "border-l-purple-500", text: "text-purple-900", dot: "bg-purple-500", badgeBg: "bg-purple-100", badgeText: "text-purple-700" },
+    { bg: "bg-pink-50", borderL: "border-l-pink-500", text: "text-pink-900", dot: "bg-pink-500", badgeBg: "bg-pink-100", badgeText: "text-pink-700" },
+    { bg: "bg-indigo-50", borderL: "border-l-indigo-500", text: "text-indigo-900", dot: "bg-indigo-500", badgeBg: "bg-indigo-100", badgeText: "text-indigo-700" },
+    { bg: "bg-emerald-50", borderL: "border-l-emerald-500", text: "text-emerald-900", dot: "bg-emerald-500", badgeBg: "bg-emerald-100", badgeText: "text-emerald-700" },
+    { bg: "bg-rose-50", borderL: "border-l-rose-500", text: "text-rose-900", dot: "bg-rose-500", badgeBg: "bg-rose-100", badgeText: "text-rose-700" },
+    { bg: "bg-cyan-50", borderL: "border-l-cyan-500", text: "text-cyan-900", dot: "bg-cyan-500", badgeBg: "bg-cyan-100", badgeText: "text-cyan-700" },
 ];
 
-const SLOT_INDICATORS = [
-    { accent: "#1a73e8" },
-    { accent: "#1e8e3e" },
-    { accent: "#e37400" },
-    { accent: "#7c4dff" },
-];
-
-const SLOT_LABELS = ["Ca 1", "Ca 2", "Ca 3", "Ca 4"];
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-function getColor(subjectCode: string) {
+function getSubjectColor(subjectCode: string) {
+    if (!subjectCode) return PASTEL_COLORS[0];
     let hash = 0;
     for (let i = 0; i < subjectCode.length; i++) hash = subjectCode.charCodeAt(i) + ((hash << 5) - hash);
-    return CARD_COLORS[Math.abs(hash) % CARD_COLORS.length];
+    return PASTEL_COLORS[Math.abs(hash) % PASTEL_COLORS.length];
 }
 
-function getSlotIndex(startTime: string): number {
-    const h = new Date(startTime).getHours();
-    if (h < 9.5) return 0;
-    if (h < 12.5) return 1;
-    if (h < 15.5) return 2;
-    return 3;
+const START_HOUR = 7;
+const END_HOUR = 18;
+const PIXELS_PER_HOUR = 100;
+const TOTAL_HOURS = END_HOUR - START_HOUR;
+
+// Ngưỡng chiều cao (px) dưới mức này coi là "card ngắn", cần phồng ra khi hover
+const COMPACT_HEIGHT_THRESHOLD = 150;
+// Chiều cao tối thiểu khi phồng ra để đủ chỗ hiển thị toàn bộ nội dung
+const EXPANDED_MIN_HEIGHT = 132;
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function formatHourLabel(h: number) {
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const hour12 = h % 12 || 12;
+    return `${hour12} ${ampm}`;
+}
+
+function CurrentTimeLine() {
+    const [top, setTop] = useState<number | null>(null);
+
+    useEffect(() => {
+        const updatePosition = () => {
+            const now = new Date();
+            const h = now.getHours();
+            const m = now.getMinutes();
+            if (h >= START_HOUR && h <= END_HOUR) {
+                const pos = (h - START_HOUR) * PIXELS_PER_HOUR + (m / 60) * PIXELS_PER_HOUR;
+                setTop(pos);
+            } else {
+                setTop(null);
+            }
+        };
+
+        updatePosition();
+        const interval = setInterval(updatePosition, 60000);
+        return () => clearInterval(interval);
+    }, []);
+
+    if (top === null) return null;
+
+    return (
+        <div
+            className="absolute left-[80px] right-0 z-[25] pointer-events-none flex items-center"
+            style={{ top: top - 4 }}
+        >
+            <div className="w-2 h-2 rounded-full bg-red-500 shrink-0 -ml-[5px]" />
+            <div className="flex-1 h-[2px] bg-red-500/80" />
+        </div>
+    );
 }
 
 // ─── Context Menu ──────────────────────────────────────────────────────────────
@@ -173,28 +210,59 @@ function ExamCard({
     onClick,
     selectable,
     selected,
-    onSelect
+    onSelect,
+    style,
+    className
 }: {
     schedule: ExamSchedule;
     onClick: (e: React.MouseEvent) => void;
     selectable?: boolean;
     selected?: boolean;
     onSelect?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    style?: React.CSSProperties;
+    className?: string;
 }) {
-    const color = getColor(schedule.subject?.subject_code ?? "");
+    const [isHovered, setIsHovered] = useState(false);
+
+    const color = getSubjectColor(schedule.subject?.subject_code ?? "");
     const supervisors = schedule.supervisors ?? [];
     const startStr = formatTime(schedule.start_time);
-    const endDate = new Date(new Date(schedule.start_time).getTime() + (schedule.duration ?? 120) * 60000);
+    const duration = schedule.duration ?? 120;
+    const endDate = new Date(new Date(schedule.start_time).getTime() + duration * 60000);
     const endStr = formatTime(endDate);
+
+    const isOverCapacity = (schedule.attendance_count ?? 0) > (schedule.room?.capacity ?? 99999);
+
+    // Card có chiều cao gốc nhỏ hơn ngưỡng -> không đủ chỗ hiển thị hết thông tin
+    const rawHeight = typeof style?.height === "number" ? style.height : 0;
+    const isCompact = rawHeight > 0 && rawHeight < COMPACT_HEIGHT_THRESHOLD;
+    const isExpanded = isHovered && isCompact;
+
+    // Khi phồng ra: bỏ giới hạn height gốc, đặt minHeight đủ để hiện toàn bộ nội dung,
+    // và nâng z-index để đè lên các card lân cận trong cùng room-column.
+    const finalStyle: React.CSSProperties = {
+        ...style,
+        height: isExpanded ? "auto" : style?.height,
+        minHeight: isExpanded ? EXPANDED_MIN_HEIGHT : style?.height,
+        zIndex: isExpanded ? 50 : undefined,
+    };
 
     return (
         <div
             onClick={onClick}
-            className="flex flex-col gap-1 h-full rounded-[10px] px-3 py-2.5 relative transition-all duration-150 shadow-sm cursor-pointer hover:shadow-md hover:-translate-y-0.5 group"
-            style={{ background: color.bg }}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+            className={cn(
+                "flex flex-col gap-0.5 rounded-[6px] py-1.5 pr-2 relative transition-all duration-150 cursor-pointer group overflow-hidden border border-slate-100",
+                selectable ? "pl-7" : "pl-2",
+                isExpanded ? "shadow-lg ring-1 ring-black/5" : "shadow-sm hover:shadow-md",
+                color.bg,
+                className
+            )}
+            style={finalStyle}
         >
             {selectable && (
-                <div className="absolute top-2 right-2 z-10" onClick={(e) => e.stopPropagation()}>
+                <div className="absolute top-1.5 left-1.5 z-[15]" onClick={(e) => e.stopPropagation()}>
                     <input
                         type="checkbox"
                         checked={selected}
@@ -203,39 +271,38 @@ function ExamCard({
                     />
                 </div>
             )}
-            {/* Thời gian */}
-            <div className="flex items-center gap-1 text-[11.5px] font-medium text-slate-500 tabular-nums pr-5">
-                <i className="ti ti-clock text-[11px] text-slate-400 shrink-0" />
-                {startStr} - {endStr}
-                <span className="ml-auto text-[10px] bg-black/5 rounded px-1 py-px text-slate-400 hidden sm:inline-block">
-                    {schedule.duration}p
-                </span>
-            </div>
+            {/* Duration ở góc trên cùng bên phải */}
+            <span className="absolute top-1.5 right-1.5 z-[10] pointer-events-none text-[10px] font-medium bg-black/5 rounded px-1.5 py-0.5 text-slate-500 hidden sm:inline-block">
+                {duration}p
+            </span>
 
-            {/* Tên môn */}
-            <div className="text-xs font-semibold leading-snug pr-4" style={{ color: color.subject }}>
+            {/* Tên môn (Hàng đầu, in đậm) */}
+            <div className={cn("text-[13px] font-bold leading-snug pr-8", color.text)}>
                 {schedule.subject?.name}
             </div>
 
-            {/* Mã môn + nhóm */}
-            <div className="flex items-center gap-1 text-[10.5px] font-medium" style={{ color: color.code }}>
-                <span
-                    className="inline-block w-[5px] h-[5px] rounded-full shrink-0"
-                    style={{ background: color.border }}
-                />
-                {schedule.subject?.subject_code} · Nhóm {schedule.group}
+            {/* Thời gian và Mã môn + nhóm dàn ngang */}
+            <div className={cn("flex items-center flex-wrap gap-x-2.5 gap-y-0.5 text-[11px] font-medium opacity-80 mt-0.5", color.text)}>
+                <div className="flex items-center gap-1 tabular-nums">
+                    <i className="ti ti-clock text-[11px] shrink-0" />
+                    {startStr} - {endStr}
+                </div>
+                <div className="flex items-center gap-1">
+                    <span className={cn("inline-block w-[3px] h-[3px] rounded-full shrink-0", color.dot)} />
+                    {schedule.subject?.subject_code} · N{schedule.group}
+                </div>
             </div>
 
-            {/* Giám thị */}
-            {supervisors.length > 0 && (
-                <div className="flex flex-col gap-px mt-0.5">
+            {/* Giám thị: hiện khi đủ chỗ (duration >= 90) HOẶC đang hover mở rộng */}
+            {supervisors.length > 0 && (duration >= 90 || isExpanded) && (
+                <div className="flex flex-col gap-px mt-1.5">
                     {supervisors.map((name, i) => (
                         <div
                             key={i}
-                            className="flex items-center gap-1 text-[11.5px] text-slate-500 truncate max-w-full"
+                            className={cn("flex items-center gap-1 text-[11px] opacity-75 truncate max-w-full", color.text)}
                             title={name}
                         >
-                            <i className="ti ti-user text-[10px] text-slate-400 shrink-0" />
+                            <i className="ti ti-user text-[11px] shrink-0" />
                             {name}
                         </div>
                     ))}
@@ -243,14 +310,17 @@ function ExamCard({
             )}
 
             {/* Badge SV */}
-            <div className="flex gap-1.5 mt-auto flex-wrap items-center">
-                <span
-                    className="inline-flex items-center gap-1 text-[10px] font-semibold rounded-md px-1.5 py-0.5 tracking-wide"
-                    style={{ background: color.badgeSv, color: color.badgeSvText }}
-                >
-                    <i className="ti ti-users text-[10px] shrink-0" />
-                    {schedule.attendance_count ?? 0} SV
+            <div className="flex gap-1.5 mt-auto flex-wrap items-center pt-1.5">
+                <span className={cn("inline-flex items-center gap-1 text-[10px] font-semibold rounded-md px-1.5 py-0.5 tracking-wide", color.badgeBg, color.badgeText)}>
+                    <i className="ti ti-users text-[11px] shrink-0" />
+                    {schedule.attendance_count ?? 0} thí sinh
                 </span>
+                {isOverCapacity && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-red-600">
+                        <i className="ti ti-alert-triangle text-[11px]" />
+                        Vượt quá sức chứa
+                    </span>
+                )}
             </div>
         </div>
     );
@@ -276,22 +346,22 @@ export function ExamScheduleGridView({
 
     const [roomPage, setRoomPage] = useState(0);
 
-    const { allRooms, grid } = useMemo(() => {
+    const { allRooms, schedulesByRoom } = useMemo(() => {
         const roomMap = new Map<string, { room_code: string; name: string; capacity?: number }>();
         examSchedules.forEach((s) => {
             if (s.room) roomMap.set(s.room.room_code, s.room);
         });
         const allRooms = Array.from(roomMap.values()).sort((a, b) => a.room_code.localeCompare(b.room_code));
 
-        const grid: Record<number, Record<string, ExamSchedule>> = { 0: {}, 1: {}, 2: {}, 3: {} };
+        const schedulesByRoom: Record<string, ExamSchedule[]> = {};
         examSchedules.forEach((s) => {
             if (s.room) {
-                const idx = getSlotIndex(s.start_time);
-                grid[idx][s.room.room_code] = s;
+                if (!schedulesByRoom[s.room.room_code]) schedulesByRoom[s.room.room_code] = [];
+                schedulesByRoom[s.room.room_code].push(s);
             }
         });
 
-        return { allRooms, grid };
+        return { allRooms, schedulesByRoom };
     }, [examSchedules]);
 
     useEffect(() => {
@@ -330,103 +400,107 @@ export function ExamScheduleGridView({
         );
     }
 
-    const activeSlots = SLOT_LABELS.map((label, idx) => ({
-        idx,
-        label,
-        hasAny: allRooms.some((r) => grid[idx]?.[r.room_code]),
-    })).filter((s) => s.hasAny);
-
     return (
         <>
-            <div className="overflow-x-auto">
-                <table className="w-full border-collapse" style={{ minWidth: rooms.length * 180 + 120 }}>
-                    <thead>
-                        <tr>
-                            <th className="bg-slate-50 px-4 py-3.5 text-[13px] font-bold text-black border-b-2 border-r border-slate-200 w-[120px] text-left align-middle whitespace-nowrap sticky left-0 z-[2] tracking-wide">
-                                <div className="flex items-center gap-1.5">
-                                    <i className="ti ti-calendar text-sm" />
-                                    Ca thi / Phòng
+            <div className="overflow-x-auto bg-white border border-slate-300 rounded-lg shadow-sm">
+                <div className="min-w-full w-max flex flex-col">
+                    {/* Header */}
+                    <div className="flex border-b border-slate-300 sticky top-0 z-[30] bg-white">
+                        <div className="text-center w-[80px] shrink-0 sticky left-0 z-[40] bg-slate-50 border-r border-slate-300 p-3 flex flex-col justify-end items-end text-[11px] font-semibold text-slate-500">
+                            GIỜ/PHÒNG
+                        </div>
+                        {rooms.map((room) => (
+                            <div
+                                key={room.room_code}
+                                className="flex-1 min-w-[220px] border-r border-slate-300 px-3.5 py-3 bg-slate-50 flex flex-col items-center justify-center"
+                            >
+                                <div className="text-[13px] font-bold text-black tracking-tight">
+                                    {room.name ?? room.room_code}
                                 </div>
-                            </th>
-                            {rooms.map((room) => (
-                                <th
-                                    key={room.room_code}
-                                    className="bg-slate-50 px-3.5 py-3 text-center border-b-2 border-r border-slate-200 min-w-[180px]"
-                                >
-                                    <div className="text-[13px] font-bold text-black tracking-tight">
-                                        {room.name ?? room.room_code}
+                                {room.capacity && (
+                                    <div className="text-[11px] text-slate-400 mt-0.5 flex items-center justify-center gap-1">
+                                        <i className="ti ti-armchair text-[10px]" />
+                                        {room.capacity} chỗ
                                     </div>
-                                    {room.capacity && (
-                                        <div className="text-[11px] text-slate-400 mt-0.5 flex items-center justify-center gap-1">
-                                            <i className="ti ti-armchair text-[10px]" />
-                                            {room.capacity} chỗ
-                                        </div>
-                                    )}
-                                </th>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Body */}
+                    <div className="flex relative" style={{ height: TOTAL_HOURS * PIXELS_PER_HOUR }}>
+                        {/* Time Axis */}
+                        <div className="w-[80px] shrink-0 sticky left-0 z-[20] bg-white border-r border-slate-300">
+                            {Array.from({ length: TOTAL_HOURS + 1 }).map((_, i) => {
+                                const isLast = i === TOTAL_HOURS;
+                                return (
+                                    <div key={i} className={cn("relative", !isLast && "border-b border-slate-200")} style={{ height: isLast ? 0 : PIXELS_PER_HOUR }}>
+                                        <span
+                                            className="absolute w-full text-center text-[11px] font-medium text-slate-500"
+                                            style={{ top: i === 0 ? '4px' : (isLast ? '-18px' : '-8px') }}
+                                        >
+                                            {formatHourLabel(START_HOUR + i)}
+                                        </span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* Background Grid */}
+                        <div className="absolute inset-0 pointer-events-none left-[80px] flex flex-col z-[1]">
+                            {Array.from({ length: TOTAL_HOURS }).map((_, i) => (
+                                <div key={i} className="border-b border-slate-200 w-full" style={{ height: PIXELS_PER_HOUR }} />
                             ))}
-                        </tr>
-                    </thead>
+                        </div>
 
-                    <tbody>
-                        {activeSlots.map(({ idx, label }, rowIndex) => {
-                            const indicator = SLOT_INDICATORS[idx] ?? SLOT_INDICATORS[0];
-                            const isLast = rowIndex === activeSlots.length - 1;
-                            return (
-                                <tr key={idx}>
-                                    <td
-                                        className={cn(
-                                            "bg-white px-3.5 py-3 align-middle whitespace-nowrap sticky left-0 z-[1] border-r border-slate-200",
-                                            !isLast && "border-b border-slate-200",
-                                        )}
-                                    >
-                                        <div className="flex items-center gap-2">
-                                            <div
-                                                className="w-1 h-6 rounded-sm shrink-0"
-                                                style={{ background: indicator.accent }}
-                                            />
-                                            <span className="text-[13px] font-bold text-black">{label}</span>
-                                        </div>
-                                    </td>
+                        <CurrentTimeLine />
 
-                                    {rooms.map((room) => {
-                                        const schedule = grid[idx]?.[room.room_code];
-                                        return (
-                                            <td
-                                                key={room.room_code}
-                                                className={cn(
-                                                    "p-1.5 h-[130px] min-w-[180px] align-top border-r border-slate-200",
-                                                    !isLast && "border-b border-slate-200",
-                                                    schedule ? "bg-white" : "bg-slate-50/60",
-                                                )}
-                                            >
-                                                {schedule ? (
-                                                    <ExamCard
-                                                        schedule={schedule}
-                                                        onClick={(e) => handleCardClick(schedule, e)}
-                                                        selectable={selectable}
-                                                        selected={selectedKeys.includes(schedule.id)}
-                                                        onSelect={(e) => {
-                                                            if (!onSelectChange) return;
-                                                            if (e.target.checked) {
-                                                                onSelectChange([...selectedKeys, schedule.id]);
-                                                            } else {
-                                                                onSelectChange(selectedKeys.filter(k => k !== schedule.id));
-                                                            }
-                                                        }}
-                                                    />
-                                                ) : (
-                                                    <div className="h-full flex items-center justify-center">
-                                                        <div className="w-5 h-0.5 rounded-full bg-slate-200" />
-                                                    </div>
-                                                )}
-                                            </td>
-                                        );
-                                    })}
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
+                        {/* Room Columns */}
+                        {rooms.map((room) => (
+                            <div key={room.room_code} className="flex-1 min-w-[220px] relative border-r border-slate-200 z-[10]">
+                                {(schedulesByRoom[room.room_code] || []).map((schedule) => {
+                                    const d = new Date(schedule.start_time);
+                                    const h = d.getHours();
+                                    const m = d.getMinutes();
+                                    const duration = schedule.duration || 120;
+
+                                    let top = (h - START_HOUR) * PIXELS_PER_HOUR + (m / 60) * PIXELS_PER_HOUR;
+                                    let height = (duration / 60) * PIXELS_PER_HOUR;
+
+                                    if (top < 0) {
+                                        height += top;
+                                        top = 0;
+                                    }
+                                    if (top + height > TOTAL_HOURS * PIXELS_PER_HOUR) {
+                                        height = TOTAL_HOURS * PIXELS_PER_HOUR - top;
+                                    }
+
+                                    if (top >= TOTAL_HOURS * PIXELS_PER_HOUR || height <= 0) return null;
+
+                                    return (
+                                        <ExamCard
+                                            key={schedule.id}
+                                            schedule={schedule}
+                                            onClick={(e) => handleCardClick(schedule, e)}
+                                            selectable={selectable}
+                                            selected={selectedKeys.includes(schedule.id)}
+                                            onSelect={(e) => {
+                                                if (!onSelectChange) return;
+                                                if (e.target.checked) {
+                                                    onSelectChange([...selectedKeys, schedule.id]);
+                                                } else {
+                                                    onSelectChange(selectedKeys.filter(k => k !== schedule.id));
+                                                }
+                                            }}
+                                            className="absolute left-1 right-1"
+                                            style={{ top, height }}
+                                        />
+                                    );
+                                })}
+                            </div>
+                        ))}
+                    </div>
+                </div>
             </div>
 
             {needsPagination && (

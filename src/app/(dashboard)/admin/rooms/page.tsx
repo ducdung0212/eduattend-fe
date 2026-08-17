@@ -72,10 +72,11 @@ export default function RoomManagementPage() {
   // --- State Bulk Delete ---
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
 
   const handleBulkDelete = async () => {
     if (selectedKeys.length === 0) return;
-    if (!confirm(`Bạn có chắc chắn muốn xóa ${selectedKeys.length} phòng đã chọn không?`)) return;
+    setBulkDeleteModalOpen(false);
 
     setBulkDeleting(true);
     try {
@@ -184,7 +185,7 @@ export default function RoomManagementPage() {
           />
           {selectedKeys.length > 0 && (
             <div className="ml-auto">
-              <Button variant="danger" size="sm" leftIcon="trash" onClick={handleBulkDelete} loading={bulkDeleting}>
+              <Button variant="danger" size="sm" leftIcon="trash" onClick={() => setBulkDeleteModalOpen(true)} loading={bulkDeleting}>
                 Xóa {selectedKeys.length} mục
               </Button>
             </div>
@@ -247,6 +248,26 @@ export default function RoomManagementPage() {
       >
         <p className="text-sm text-slate-600">
           Bạn có chắc chắn muốn xóa phòng <span className="font-semibold text-slate-900">{roomToDelete?.name}</span> không? Hành động này không thể hoàn tác.
+        </p>
+      </Modal>
+      <Modal
+        open={bulkDeleteModalOpen}
+        onClose={() => setBulkDeleteModalOpen(false)}
+        title="Xác nhận xóa hàng loạt"
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setBulkDeleteModalOpen(false)}>
+              Hủy
+            </Button>
+            <Button variant="danger" loading={bulkDeleting} onClick={handleBulkDelete}>
+              Xóa {selectedKeys.length} mục
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-slate-600">
+          Bạn có chắc chắn muốn xóa <span className="font-semibold text-slate-900">{selectedKeys.length}</span> phòng đã chọn không? Hành động này không thể hoàn tác.
         </p>
       </Modal>
     </div>
