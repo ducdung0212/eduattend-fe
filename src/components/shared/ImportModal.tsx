@@ -5,7 +5,7 @@ import { Modal } from "@/components/ui/Modal";
 import api from "@/lib/api";
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
 
 export interface ImportModalProps {
     open: boolean;
@@ -104,6 +104,32 @@ export function ImportModal({
 
             const newWorksheet = XLSX.utils.aoa_to_sheet(newData);
             
+            // Áp dụng style kẻ bảng cho tất cả các ô
+            const borderStyle = {
+                top: { style: "thin", color: { rgb: "000000" } },
+                bottom: { style: "thin", color: { rgb: "000000" } },
+                left: { style: "thin", color: { rgb: "000000" } },
+                right: { style: "thin", color: { rgb: "000000" } }
+            };
+
+            for (const key in newWorksheet) {
+                if (key.startsWith("!")) continue; // Bỏ qua các key cấu hình (!ref, !cols...)
+                
+                if (newWorksheet[key]) {
+                    newWorksheet[key].s = {
+                        border: borderStyle,
+                        alignment: { vertical: "center", wrapText: true }
+                    };
+
+                    // In đậm và tô màu nền cho dòng tiêu đề
+                    const rowNumber = parseInt(key.replace(/[a-zA-Z]/g, ''));
+                    if (rowNumber === 1) {
+                        newWorksheet[key].s.font = { bold: true };
+                        newWorksheet[key].s.fill = { fgColor: { rgb: "EAEAEA" } };
+                    }
+                }
+            }
+
             // Auto-fit column widths
             if (newData.length > 0) {
                 const colWidths = newData[0].map((_, colIndex) => {
