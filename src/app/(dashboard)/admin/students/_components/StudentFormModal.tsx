@@ -71,7 +71,7 @@ export function StudentFormModal({ open, student, onClose, onSuccess }: StudentF
             if (student) {
                 const facultyCode = student.class.faculty.faculty_code ?? "";
                 setSelectedFacultyCode(facultyCode);
-                setClassSearch(`${student.class?.name ?? ""} (${student.class?.class_code ?? ""})`);
+                setClassSearch(`${student.class?.class_code}`);
                 setFormData({
                     student_code: student.student_code ?? "",
                     last_name: student.last_name ?? "",
@@ -397,8 +397,8 @@ export function StudentFormModal({ open, student, onClose, onSuccess }: StudentF
                             onFocus={() => setShowClassDropdown(true)}
                             onChange={(e) => {
                                 setClassSearch(e.target.value);
+                                setFormData({ ...formData, class_code: e.target.value });
                                 setShowClassDropdown(true);
-                                if (e.target.value === "") setFormData({ ...formData, class_code: "" });
                             }}
                             className="w-full rounded-lg border text-sm text-slate-900 bg-white h-9 px-3 outline-none transition-colors border-slate-200 focus:border-slate-400 focus:ring-2 focus:ring-slate-100 disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed"
                         />
@@ -421,7 +421,7 @@ export function StudentFormModal({ open, student, onClose, onSuccess }: StudentF
                                                 formData.class_code === c.class_code ? "bg-blue-50" : ""
                                             }`}
                                         >
-                                            <span className="text-xs text-slate-500">{c.class_code}</span>
+                                            <span className="text-sm text-slate-500">{c.class_code}</span>
                                         </li>
                                     ))}
                                 {classes.filter((c) =>

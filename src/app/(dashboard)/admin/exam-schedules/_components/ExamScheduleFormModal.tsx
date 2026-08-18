@@ -261,7 +261,7 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
     // --- Chọn phòng (combobox) ---
     const handleSelectRoom = (room: Room) => {
         setFormData((prev) => ({ ...prev, room_code: room.room_code }));
-        setRoomSearch(`(${room.room_code})`);
+        setRoomSearch(room.room_code);
         setShowRoomDropdown(false);
     };
 
@@ -277,35 +277,6 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
     // --- Submit ---
     const handleSubmit = async (e: React.SyntheticEvent) => {
         e.preventDefault();
-
-        // Validation: Ràng buộc giờ thi từ 7:00 AM đến 18:00 PM
-        if (examTime) {
-            const [h, m] = examTime.split(":").map(Number);
-            const startMinutes = h * 60 + m;
-            const endMinutes = startMinutes + formData.duration;
-
-            const minAllowed = 7 * 60; // 7:00 AM
-            const maxAllowed = 18 * 60; // 18:00 PM
-
-            if (formData.duration < 45) {
-                toast.error("Thời lượng thi không được nhỏ hơn 45 phút.");
-                return;
-            }
-            if (formData.duration > 180) {
-                toast.error("Thời lượng thi không được vượt quá 180 phút.");
-                return;
-            }
-
-            if (startMinutes <= minAllowed) {
-                toast.error("Giờ bắt đầu không hợp lệ! Ca thi phải bắt đầu sau 07:00 sáng.");
-                return;
-            }
-            if (endMinutes >= maxAllowed) {
-                toast.error(`Thời lượng không hợp lệ! Ca thi kéo dài đến ${Math.floor(endMinutes / 60).toString().padStart(2, '0')}:${(endMinutes % 60).toString().padStart(2, '0')}, vượt quá giới hạn (phải kết thúc trước 18:00).`);
-                return;
-            }
-        }
-
         setSubmitting(true);
         try {
             const payload = {
@@ -467,8 +438,8 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
                             onFocus={() => setShowRoomDropdown(true)}
                             onChange={(e) => {
                                 setRoomSearch(e.target.value);
+                                setFormData((prev) => ({ ...prev, room_code: e.target.value }));
                                 setShowRoomDropdown(true);
-                                if (e.target.value === "") setFormData((prev) => ({ ...prev, room_code: "" }));
                             }}
                             className="w-full rounded-lg border text-sm text-slate-900 bg-white h-9 px-3 outline-none transition-colors border-slate-200 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
                         />
@@ -494,7 +465,7 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
                                             className={`px-3 py-2 cursor-pointer hover:bg-slate-50 border-b border-slate-100 last:border-0 flex flex-col ${formData.room_code === room.room_code ? "bg-blue-50" : ""
                                                 }`}
                                         >
-                                            <span className="text-sm font-medium text-slate-800">{room.name}</span>
+                                            <span className="text-sm font-medium text-slate-800">{room.room_code}</span>
                                             <div className="flex items-center gap-2 text-xs text-slate-500">
                                                 <span>{room.room_code}</span>
                                                 <span className="text-slate-300">•</span>
@@ -523,8 +494,8 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
                             onFocus={() => setShowSubjectDropdown(true)}
                             onChange={(e) => {
                                 setSubjectSearch(e.target.value);
+                                setFormData((prev) => ({ ...prev, subject_code: e.target.value }));
                                 setShowSubjectDropdown(true);
-                                if (e.target.value === "") setFormData((prev) => ({ ...prev, subject_code: "" }));
                             }}
                             disabled={!selectedPeriod}
                             className={`w-full rounded-lg border text-sm text-slate-900 bg-white h-9 px-3 outline-none transition-colors border-slate-200 focus:border-slate-400 focus:ring-2 focus:ring-slate-100 ${!selectedPeriod ? 'opacity-50 cursor-not-allowed bg-slate-50' : ''}`}

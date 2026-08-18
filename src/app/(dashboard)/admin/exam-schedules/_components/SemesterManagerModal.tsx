@@ -34,6 +34,10 @@ export function SemesterManagerModal({ open, onClose, onSuccess }: SemesterManag
     const [formData, setFormData] = useState({ academic_year: "", semester_number: 1, start_date: "", end_date: "" });
     const [showForm, setShowForm] = useState(false);
 
+    // Delete state
+    const [semesterToDelete, setSemesterToDelete] = useState<Semester | null>(null);
+    const [deleting, setDeleting] = useState(false);
+
     const fetchSemesters = useCallback(async () => {
         setLoading(true);
         try {
@@ -118,17 +122,20 @@ export function SemesterManagerModal({ open, onClose, onSuccess }: SemesterManag
         }
     };
 
-    const handleDelete = async (semester: Semester) => {
-        const name = `Học kì ${semester.semester_number} - ${semester.academic_year}`;
-        if (!confirm(`Xóa "${name}"? Các ca thi thuộc học kì này sẽ bị gỡ liên kết.`)) return;
+    const confirmDelete = async () => {
+        if (!semesterToDelete) return;
+        setDeleting(true);
         try {
-            await api.delete(`/semesters/${semester.id}`);
+            await api.delete(`/semesters/${semesterToDelete.id}`);
             toast.success("Đã xóa học kì");
             fetchSemesters();
+            setSemesterToDelete(null);
             onSuccess?.();
         } catch (err: any) {
             const msg = err.response?.data?.message || err.message;
             toast.error(Array.isArray(msg) ? msg.join(", ") : msg);
+        } finally {
+            setDeleting(false);
         }
     };
 
@@ -277,7 +284,7 @@ export function SemesterManagerModal({ open, onClose, onSuccess }: SemesterManag
                                                 <Button
                                                     variant="ghost"
                                                     size="sm"
-                                                    onClick={() => handleDelete(semester)}
+                                                    onClick={() => setSemesterToDelete(semester)}
                                                     className="h-7 w-7 p-0 flex items-center justify-center rounded-md text-red-600 hover:bg-red-50 transition-colors"
                                                 >
                                                     <i className="ti ti-trash text-sm" />
@@ -329,12 +336,19 @@ export function SemesterManagerModal({ open, onClose, onSuccess }: SemesterManag
                                     required
                                 >
                                     <option value="" disabled>-- Chọn năm học --</option>
-                                    {Array.from({ length: 5 }, (_, i) => {
-                                        // Chỉ tạo ra các năm học từ quá khứ đến hiện tại (vd hiện tại 2026 -> lấy tới 2026-2027)
-                                        const start = new Date().getFullYear() - 4 + i;
-                                        const yearStr = `${start}-${start + 1}`;
-                                        return <option key={yearStr} value={yearStr}>{yearStr}</option>;
-                                    }).reverse()}
+                                    {(() => {
+                                        const currentYear = new Date().getFullYear();
+                                        const options = [
+                                            `${currentYear - 1}-${currentYear}`,
+                                            `${currentYear}-${currentYear + 1}`
+                                        ];
+                                        if (editingSemester && !options.includes(editingSemester.academic_year)) {
+                                            options.unshift(editingSemester.academic_year);
+                                        }
+                                        return options.map(yearStr => (
+                                            <option key={yearStr} value={yearStr}>{yearStr}</option>
+                                        ));
+                                    })()}
                                 </select>
                             </div>
                             <div>
@@ -407,6 +421,27 @@ export function SemesterManagerModal({ open, onClose, onSuccess }: SemesterManag
             >
                 <p className="text-sm text-slate-600">
                     Bạn có chắc chắn muốn xóa <span className="font-semibold text-slate-900">{selectedKeys.length}</span> học kì đã chọn không? Hành động này không thể hoàn tác.
+                </p>
+            </Modal>
+
+            <Modal
+                open={!!semesterToDelete}
+                onClose={() => setSemesterToDelete(null)}
+                title="Xác nhận xóa"
+                size="sm"
+                footer={
+                    <>
+                        <Button variant="secondary" onClick={() => setSemesterToDelete(null)}>
+                            Hủy
+                        </Button>
+                        <Button variant="danger" loading={deleting} onClick={confirmDelete}>
+                            Xóa
+                        </Button>
+                    </>
+                }
+            >
+                <p className="text-sm text-slate-600">
+                    Bạn có chắc chắn muốn xóa <span className="font-semibold text-slate-900">Học kì {semesterToDelete?.semester_number} - {semesterToDelete?.academic_year}</span> không? Hành động này không thể hoàn tác.
                 </p>
             </Modal>
         </Modal>

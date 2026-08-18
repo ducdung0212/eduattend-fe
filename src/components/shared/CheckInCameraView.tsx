@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/Button";
 import api from "@/lib/api";
-import { formatTime, todayString } from "@/lib/utils";
+import { formatTime } from "@/lib/utils";
 import { ExamSchedule } from "@/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
@@ -67,44 +67,30 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
         setSearchingStudent(true);
         setLookupResult(null);
         try {
-            const res = await api.get("/exam-schedules", {
+            const res = await api.get("/attendance-records/check-room", {
                 params: {
-                    start_time: todayString(),
                     student_code: code,
-                    limit: 50,
+                    exam_schedule_id: schedule.id,
                 },
             });
-            const schedules = res.data?.data || [];
             
-            if (schedules.length === 0) {
+            const resultData = res.data?.data;
+            if (resultData) {
                 setLookupResult({
-                    type: 'error',
-                    message: `Sinh viên ${code} không có lịch thi nào trong hôm nay.`
+                    type: resultData.type,
+                    message: resultData.message
                 });
             } else {
-                const isThisRoom = schedules.some((s: any) => s.id === schedule.id);
-                
-                const scheduleDetails = schedules.map((s: any) => {
-                    const timeStr = formatTime(s.start_time);
-                    return `môn ${s.subject?.name} lúc ${timeStr} tại phòng ${s.room?.name || ''}`;
-                }).join(', ');
-
-                if (isThisRoom) {
-                    setLookupResult({
-                        type: 'success',
-                        message: `Sinh viên ${code} ĐÚNG PHÒNG. Các ca thi hôm nay: ${scheduleDetails}.`
-                    });
-                } else {
-                    setLookupResult({
-                        type: 'info',
-                        message: `Sinh viên ${code} ĐI NHẦM PHÒNG. Lịch thi hôm nay: ${scheduleDetails}.`
-                    });
-                }
+                setLookupResult({
+                    type: 'error',
+                    message: 'Không nhận được dữ liệu trả về.'
+                });
             }
-        } catch (err) {
+        } catch (err: any) {
+            const errorMsg = err.response?.data?.message || 'Có lỗi xảy ra khi tra cứu.';
             setLookupResult({
                 type: 'error',
-                message: 'Có lỗi xảy ra khi tra cứu.'
+                message: Array.isArray(errorMsg) ? errorMsg[0] : errorMsg
             });
         } finally {
             setSearchingStudent(false);
@@ -431,18 +417,19 @@ export function CheckInCameraView({ open, schedule, onClose, onSuccess }: Props)
                             </div>
                             <div className="p-4 space-y-3">
                                 <div className="flex gap-3">
-                                    <Input
-                                        value={studentSearch}
-                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setStudentSearch(e.target.value)}
-                                        placeholder="Nhập mã số sinh viên (VD: DH520...)"
-                                        className="flex-1"
-                                        onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
-                                            if (e.key === 'Enter') {
-                                                e.preventDefault();
-                                                handleLookup();
-                                            }
-                                        }}
-                                    />
+                                    <div className="flex-1">
+                                        <Input
+                                            value={studentSearch}
+                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setStudentSearch(e.target.value)}
+                                            placeholder="Nhập mã số sinh viên (VD: DH520...)"
+                                            onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    handleLookup();
+                                                }
+                                            }}
+                                        />
+                                    </div>
                                     <Button
                                         variant="primary"
                                         disabled={!studentSearch.trim()}
