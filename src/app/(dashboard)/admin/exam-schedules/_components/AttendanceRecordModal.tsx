@@ -161,6 +161,49 @@ export function AttendanceRecordModal({ open, examSchedule, onClose, onSuccess }
     const [bulkDeleting, setBulkDeleting] = useState(false);
     const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
 
+    const handleSelectAllRecords = async (checked: boolean) => {
+        if (!checked) {
+            setSelectedKeys([]);
+            return;
+        }
+
+        try {
+            setLoading(true);
+            const allKeys: string[] = [];
+            
+            // Backend cho phép limit tối đa 100 mỗi request
+            const limit = 100;
+            const totalPages = Math.ceil(meta.total / limit);
+            const promises = [];
+            
+            for (let p = 1; p <= totalPages; p++) {
+                promises.push(
+                    api.get("/attendance-records", {
+                        params: {
+                            exam_schedule_id: examScheduleId,
+                            search: search || undefined,
+                            page: p,
+                            limit: limit,
+                        },
+                    })
+                );
+            }
+            
+            const responses = await Promise.all(promises);
+            responses.forEach(res => {
+                const data = res.data?.data ?? [];
+                allKeys.push(...data.map((r: AttendanceRecord) => r.id));
+            });
+            
+            setSelectedKeys(allKeys);
+            toast.success(`Đã chọn tất cả ${allKeys.length} sinh viên`);
+        } catch (error: any) {
+            toast.error(error.message || "Lỗi khi lấy danh sách sinh viên");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleBulkDelete = async () => {
         if (selectedKeys.length === 0) return;
         setBulkDeleteModalOpen(false);
@@ -308,6 +351,7 @@ export function AttendanceRecordModal({ open, examSchedule, onClose, onSuccess }
                         selectable={true}
                         selectedRowKeys={selectedKeys}
                         onSelectChange={setSelectedKeys}
+                        onSelectAll={handleSelectAllRecords}
                     />
                 </div>
 

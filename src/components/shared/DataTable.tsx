@@ -22,6 +22,7 @@ interface DataTableProps<T> {
   selectable?: boolean;
   selectedRowKeys?: string[];
   onSelectChange?: (keys: string[]) => void;
+  onSelectAll?: (checked: boolean) => void;
 }
 
 function SkeletonRow({ cols, selectable }: { cols: number, selectable?: boolean }) {
@@ -53,6 +54,7 @@ export function DataTable<T>({
   selectable,
   selectedRowKeys = [],
   onSelectChange,
+  onSelectAll,
 }: DataTableProps<T>) {
   const ALIGN = { left: 'text-left', right: 'text-right', center: 'text-center' };
   
@@ -66,6 +68,10 @@ export function DataTable<T>({
   };
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (onSelectAll) {
+      onSelectAll(e.target.checked);
+      return;
+    }
     if (!onSelectChange) return;
     if (e.target.checked) {
       const currentPageKeys = data.map(rowKey);
