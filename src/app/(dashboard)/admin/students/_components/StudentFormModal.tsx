@@ -406,8 +406,7 @@ export function StudentFormModal({ open, student, onClose, onSuccess }: StudentF
                             <ul className="absolute z-50 w-full mt-1 bg-white border border-slate-200 shadow-xl rounded-md max-h-52 overflow-y-auto">
                                 {classes
                                     .filter((c) =>
-                                        c.class_code.toLowerCase().includes(classSearch.toLowerCase()) ||
-                                        c.name.toLowerCase().includes(classSearch.toLowerCase())
+                                        c.class_code.toLowerCase().includes(classSearch.toLowerCase())
                                     )
                                     .map((c) => (
                                         <li
@@ -415,20 +414,19 @@ export function StudentFormModal({ open, student, onClose, onSuccess }: StudentF
                                             onMouseDown={(e) => {
                                                 e.preventDefault();
                                                 setFormData({ ...formData, class_code: c.class_code });
-                                                setClassSearch(`${c.name} (${c.class_code})`);
+                                                setClassSearch(`${c.class_code}`);
                                                 setShowClassDropdown(false);
                                             }}
                                             className={`px-3 py-2 cursor-pointer hover:bg-slate-50 border-b border-slate-100 last:border-0 flex flex-col ${
                                                 formData.class_code === c.class_code ? "bg-blue-50" : ""
                                             }`}
                                         >
-                                            <span className="text-sm font-medium text-slate-800">{c.name}</span>
                                             <span className="text-xs text-slate-500">{c.class_code}</span>
                                         </li>
                                     ))}
                                 {classes.filter((c) =>
-                                    c.class_code.toLowerCase().includes(classSearch.toLowerCase()) ||
-                                    c.name.toLowerCase().includes(classSearch.toLowerCase())
+                                    c.class_code.toLowerCase().includes(classSearch.toLowerCase()) 
+                                   
                                 ).length === 0 && (
                                     <li className="px-4 py-3 text-sm text-slate-500 text-center">
                                         Không tìm thấy lớp nào

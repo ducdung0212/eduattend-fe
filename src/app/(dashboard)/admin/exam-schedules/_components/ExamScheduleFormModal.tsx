@@ -168,7 +168,7 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
                 );
                 setRoomSearch(
                     examSchedule.room
-                        ? `${examSchedule.room.name} (${examSchedule.room.room_code})`
+                        ? `(${examSchedule.room.room_code})`
                         : ""
                 );
 
@@ -261,7 +261,7 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
     // --- Chọn phòng (combobox) ---
     const handleSelectRoom = (room: Room) => {
         setFormData((prev) => ({ ...prev, room_code: room.room_code }));
-        setRoomSearch(`${room.name} (${room.room_code})`);
+        setRoomSearch(`(${room.room_code})`);
         setShowRoomDropdown(false);
     };
 
@@ -570,6 +570,7 @@ export function ExamScheduleFormModal({ open, examSchedule, onClose, onSuccess }
                     type="number"
                     required
                     min={1}
+                    max={10}
                     value={formData.group || ""}
                     onChange={(e) => setFormData((prev) => ({ ...prev, group: Number(e.target.value) }))}
                     placeholder="Ví dụ: 1"

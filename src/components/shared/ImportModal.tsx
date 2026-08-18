@@ -55,8 +55,8 @@ export function ImportModal({
             const firstSheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[firstSheetName];
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const data: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+            // Sử dụng raw: false để XLSX giữ nguyên định dạng (format) hiển thị của các cột ngày giờ/số thay vì parse về số thập phân
+            const data: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false, defval: "" });
 
             if (data.length > 0) {
                 data[0].push("Lỗi chi tiết");
