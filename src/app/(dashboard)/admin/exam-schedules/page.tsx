@@ -19,6 +19,8 @@ import * as XLSX from "xlsx-js-style";
 import { ExamDetailView } from "@/components/shared/ExamDetailView";
 import { formatDateTime } from "@/lib/utils";
 
+const LIMIT=100;
+
 export default function ExamScheduleManagementPage() {
     // --- State Modals ---
     const [modalOpen, setModalOpen] = useState(false);
@@ -55,7 +57,7 @@ export default function ExamScheduleManagementPage() {
     // Fetch học kì
     const fetchSemesters = useCallback(async () => {
         try {
-            const res = await api.get("/semesters", { params: { limit: 100 } });
+            const res = await api.get("/semesters", { params: { limit: LIMIT } });
             setSemesters(res.data?.data || []);
         } catch {
             console.error("Lỗi tải học kì");
@@ -72,7 +74,7 @@ export default function ExamScheduleManagementPage() {
         api.get("/exam-schedules", {
             params: {
                 semester_id: selectedSemesterId || undefined,
-                limit: 1000,
+                limit: LIMIT,
             },
         })
             .then((res) => {
@@ -113,7 +115,7 @@ export default function ExamScheduleManagementPage() {
             const res = await api.get("/exam-schedules", {
                 params: {
                     page: 1,
-                    limit: 999,
+                    limit: LIMIT,
                     start_time: gridDate || undefined,
                     semester_id: selectedSemesterId || undefined,
                 },
@@ -479,8 +481,23 @@ export default function ExamScheduleManagementPage() {
                                 >
                                     Hôm nay
                                 </Button>
-                                {selectedKeys.length > 0 && (
-                                    <div className="ml-auto">
+                                <div className="ml-auto flex items-center gap-4">
+                                    <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer w-4 h-4 transition-colors"
+                                            checked={examSchedules.length > 0 && selectedKeys.length === examSchedules.length}
+                                            onChange={(e) => {
+                                                if (e.target.checked) {
+                                                    setSelectedKeys(examSchedules.map((s) => s.id));
+                                                } else {
+                                                    setSelectedKeys([]);
+                                                }
+                                            }}
+                                        />
+                                        Chọn tất cả
+                                    </label>
+                                    {selectedKeys.length > 0 && (
                                         <Button
                                             variant="danger"
                                             size="sm"
@@ -490,8 +507,8 @@ export default function ExamScheduleManagementPage() {
                                         >
                                             Xóa {selectedKeys.length} mục
                                         </Button>
-                                    </div>
-                                )}
+                                    )}
+                                </div>
                             </div>
                         </div>
 
