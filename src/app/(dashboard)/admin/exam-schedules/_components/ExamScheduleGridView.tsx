@@ -56,39 +56,7 @@ function formatHourLabel(h: number) {
     return `${hour12} ${ampm}`;
 }
 
-function CurrentTimeLine() {
-    const [top, setTop] = useState<number | null>(null);
 
-    useEffect(() => {
-        const updatePosition = () => {
-            const now = new Date();
-            const h = now.getHours();
-            const m = now.getMinutes();
-            if (h >= START_HOUR && h <= END_HOUR) {
-                const pos = (h - START_HOUR) * PIXELS_PER_HOUR + (m / 60) * PIXELS_PER_HOUR;
-                setTop(pos);
-            } else {
-                setTop(null);
-            }
-        };
-
-        updatePosition();
-        const interval = setInterval(updatePosition, 60000);
-        return () => clearInterval(interval);
-    }, []);
-
-    if (top === null) return null;
-
-    return (
-        <div
-            className="absolute left-[80px] right-0 z-[25] pointer-events-none flex items-center"
-            style={{ top: top - 4 }}
-        >
-            <div className="w-2 h-2 rounded-full bg-red-500 shrink-0 -ml-[5px]" />
-            <div className="flex-1 h-[2px] bg-red-500/80" />
-        </div>
-    );
-}
 
 // ─── Context Menu ──────────────────────────────────────────────────────────────
 function ContextMenu({
@@ -453,7 +421,7 @@ export function ExamScheduleGridView({
                             ))}
                         </div>
 
-                        <CurrentTimeLine />
+
 
                         {/* Room Columns */}
                         {rooms.map((room) => (

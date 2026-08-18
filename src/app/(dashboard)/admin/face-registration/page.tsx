@@ -192,7 +192,7 @@ export default function FaceRegistrationPage() {
                 } else {
                     toast.error(`Lưu thất bại toàn bộ ${allFailures.length} ảnh.`);
                 }
-                
+
                 setTimeout(() => {
                     if (window.confirm(`Có ${allFailures.length} ảnh bị lỗi. Bạn có muốn tải xuống file Excel chứa chi tiết lỗi không?`)) {
                         try {
@@ -201,7 +201,7 @@ export default function FaceRegistrationPage() {
                                 data.push([f.name, f.reason]);
                             });
                             const newWorksheet = XLSX.utils.aoa_to_sheet(data);
-                            
+
                             // Auto-fit column widths
                             if (data.length > 0) {
                                 const colWidths = data[0].map((_, colIndex) => {
@@ -222,7 +222,7 @@ export default function FaceRegistrationPage() {
                         }
                     }
                 }, 100);
-                
+
                 const successFileNames = new Set(
                     Array.isArray(results)
                         ? results.filter((r) => r.success).map((r) => r.fileName)
@@ -238,7 +238,7 @@ export default function FaceRegistrationPage() {
         }
     };
 
-            const uniqueUserCount = new Set(images.map((img) => img.user_code).filter(Boolean)).size;
+    const uniqueUserCount = new Set(images.map((img) => img.user_code).filter(Boolean)).size;
     const missingCodeCount = images.filter((img) => !img.user_code).length;
 
     return (
@@ -246,21 +246,19 @@ export default function FaceRegistrationPage() {
             {/* Tabs */}
             <div className="flex border-b border-slate-200">
                 <button
-                    className={`py-3 px-6 text-sm font-medium border-b-2 transition-colors ${
-                        activeTab === "student"
+                    className={`py-3 px-6 text-sm font-medium border-b-2 transition-colors ${activeTab === "student"
                             ? "border-blue-600 text-blue-600 bg-blue-50/50"
                             : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50"
-                    }`}
+                        }`}
                     onClick={() => { setActiveTab("student"); setImages([]); }}
                 >
                     Đăng ký Sinh viên
                 </button>
                 <button
-                    className={`py-3 px-6 text-sm font-medium border-b-2 transition-colors ${
-                        activeTab === "lecturer"
+                    className={`py-3 px-6 text-sm font-medium border-b-2 transition-colors ${activeTab === "lecturer"
                             ? "border-blue-600 text-blue-600 bg-blue-50/50"
                             : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50"
-                    }`}
+                        }`}
                     onClick={() => { setActiveTab("lecturer"); setImages([]); }}
                 >
                     Đăng ký Giảng viên
@@ -320,9 +318,8 @@ export default function FaceRegistrationPage() {
                             {images.map((img, index) => (
                                 <div
                                     key={index}
-                                    className={`relative group rounded-md overflow-hidden border bg-slate-100 aspect-square shadow-sm ${
-                                        img.user_code ? "border-slate-200" : "border-rose-300"
-                                    }`}
+                                    className={`relative group rounded-md overflow-hidden border bg-slate-100 aspect-square shadow-sm ${img.user_code ? "border-slate-200" : "border-rose-300"
+                                        }`}
                                 >
                                     <img
                                         src={img.preview}
@@ -331,9 +328,8 @@ export default function FaceRegistrationPage() {
                                     />
 
                                     <div
-                                        className={`absolute bottom-0 inset-x-0 text-white text-[10px] font-semibold text-center py-0.5 px-1 truncate ${
-                                            img.user_code ? "bg-black/60" : "bg-rose-600/90"
-                                        }`}
+                                        className={`absolute bottom-0 inset-x-0 text-white text-[10px] font-semibold text-center py-0.5 px-1 truncate ${img.user_code ? "bg-black/60" : "bg-rose-600/90"
+                                            }`}
                                     >
                                         {img.user_code || "Chưa rõ mã"}
                                     </div>
@@ -365,7 +361,7 @@ export default function FaceRegistrationPage() {
                                 onClick={handleClearAll}
                                 disabled={uploading}
                             >
-                                <IconX className="w-4 h-4 mr-1.5" /> Xóa tất cả
+                                Xóa tất cả
                             </Button>
                             <Button
                                 variant="primary"
@@ -373,7 +369,7 @@ export default function FaceRegistrationPage() {
                                 loading={uploading}
                                 disabled={missingCodeCount > 0}
                             >
-                                <IconCheck className="w-4 h-4 mr-1.5" /> {uploading ? "Đang xử lý..." : "Lưu tất cả vào hệ thống"}
+                                {uploading ? "Đang xử lý..." : "Lưu tất cả vào hệ thống"}
                             </Button>
                         </div>
                     </div>
